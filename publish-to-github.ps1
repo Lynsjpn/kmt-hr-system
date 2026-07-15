@@ -5,6 +5,13 @@
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 
+# 0. GitHub CLI が無ければインストール（UACの確認が出たら「はい」を選択）
+if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
+    Write-Host "GitHub CLI をインストールします..." -ForegroundColor Cyan
+    winget install --id GitHub.cli --accept-package-agreements --accept-source-agreements
+    $env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path','User')
+}
+
 # 1. GitHub CLI ログイン確認
 gh auth status 2>$null
 if ($LASTEXITCODE -ne 0) {
