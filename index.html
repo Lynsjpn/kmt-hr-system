@@ -1,0 +1,1360 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KMT 人事管理システム（クラウド版）</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+:root{
+  --bg:#f4f6f9; --panel:#ffffff; --border:#dde3ea; --text:#1f2937; --sub:#6b7280;
+  --accent:#1a56a8; --accent-soft:#e8f0fb; --danger:#c0392b; --danger-soft:#fdecea;
+  --warn:#b7791f; --warn-soft:#fdf3e3; --ok:#1e7e4e; --ok-soft:#e6f4ec;
+  --radius:10px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Hiragino Kaku Gothic ProN","Yu Gothic UI","Meiryo",sans-serif;background:var(--bg);color:var(--text);font-size:14px}
+header{background:#12325e;color:#fff;padding:10px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+header h1{font-size:17px;font-weight:700}
+header .sub{font-size:11px;opacity:.75}
+nav{display:flex;gap:4px;flex-wrap:wrap;margin-left:auto;align-items:center}
+nav button{background:transparent;border:none;color:#cdd9ea;padding:8px 12px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600}
+nav button:hover{background:rgba(255,255,255,.12);color:#fff}
+nav button.active{background:#fff;color:#12325e}
+nav .userchip{font-size:11px;color:#cdd9ea;margin-left:8px;border-left:1px solid rgba(255,255,255,.25);padding-left:12px}
+main{max-width:1280px;margin:0 auto;padding:20px}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:16px}
+.panel h2{font-size:16px;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.panel h2 .en{font-size:11px;color:var(--sub);font-weight:400}
+.grid{display:grid;gap:12px}
+.grid.cols4{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
+.grid.cols3{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.stat{background:var(--accent-soft);border-radius:var(--radius);padding:14px;text-align:center}
+.stat .num{font-size:26px;font-weight:800;color:var(--accent)}
+.stat .lbl{font-size:12px;color:var(--sub);margin-top:2px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:#eef2f7;text-align:left;padding:8px;border-bottom:2px solid var(--border);white-space:nowrap;font-size:12px}
+td{padding:8px;border-bottom:1px solid var(--border);vertical-align:top}
+tr.clickable{cursor:pointer}
+tr.clickable:hover{background:#f3f7fc}
+.tablewrap{overflow-x:auto}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap}
+.b-blue{background:var(--accent-soft);color:var(--accent)}
+.b-green{background:var(--ok-soft);color:var(--ok)}
+.b-red{background:var(--danger-soft);color:var(--danger)}
+.b-yellow{background:var(--warn-soft);color:var(--warn)}
+.b-gray{background:#eceff3;color:var(--sub)}
+button.btn{background:var(--accent);color:#fff;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600}
+button.btn:hover{filter:brightness(1.1)}
+button.btn.secondary{background:#fff;color:var(--accent);border:1px solid var(--accent)}
+button.btn.danger{background:var(--danger)}
+button.btn.small{padding:4px 10px;font-size:12px}
+button.btn.ghost{background:#fff;color:var(--sub);border:1px solid var(--border)}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.toolbar input,.toolbar select{padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:#fff}
+.toolbar .spacer{flex:1}
+.modal-bg{position:fixed;inset:0;background:rgba(15,23,42,.5);display:none;align-items:flex-start;justify-content:center;padding:30px 12px;overflow:auto;z-index:50}
+.modal-bg.open{display:flex}
+.modal{background:#fff;border-radius:12px;max-width:860px;width:100%;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.modal h3{font-size:16px;margin-bottom:14px}
+.formgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px 14px}
+.formgrid label,.field label{display:block;font-size:11px;font-weight:700;color:var(--sub);margin-bottom:3px}
+.formgrid input,.formgrid select,.formgrid textarea,.field input,.field select,.field textarea{width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:inherit}
+.formgrid textarea{resize:vertical}
+.fieldset{border:1px solid var(--border);border-radius:10px;padding:12px;margin-top:14px}
+.fieldset legend{font-size:12px;font-weight:700;color:var(--accent);padding:0 6px}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
+.alert-item{display:flex;gap:10px;align-items:center;padding:8px 10px;border-radius:8px;margin-bottom:6px;font-size:13px}
+.alert-item.red{background:var(--danger-soft)}
+.alert-item.yellow{background:var(--warn-soft)}
+.alert-item.blue{background:var(--accent-soft)}
+.alert-item b{white-space:nowrap}
+.muted{color:var(--sub);font-size:12px}
+.section-title{font-size:13px;font-weight:800;color:var(--accent);margin:16px 0 8px;border-left:4px solid var(--accent);padding-left:8px}
+.doc-status{border:1px solid var(--border);border-radius:6px;padding:3px 6px;font-size:12px;background:#fff}
+.st-未依頼{color:var(--sub)} .st-依頼中{color:var(--warn)} .st-受領{color:var(--accent)} .st-確認済{color:var(--ok)} .st-対象外{color:#aaa}
+.tag-row{display:flex;gap:6px;flex-wrap:wrap}
+.progress{height:8px;background:#e5eaf1;border-radius:6px;overflow:hidden;min-width:80px}
+.progress>div{height:100%;background:var(--ok)}
+.detail-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:13px}
+.kv dt{color:var(--sub);white-space:nowrap}
+.kv dd{font-weight:600}
+footer{text-align:center;color:var(--sub);font-size:11px;padding:16px}
+#toast{position:fixed;bottom:18px;right:18px;background:#12325e;color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;display:none;z-index:99;box-shadow:0 8px 24px rgba(0,0,0,.3)}
+#toast.err{background:var(--danger)}
+.login-wrap{min-height:80vh;display:flex;align-items:center;justify-content:center}
+.login-card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:30px;max-width:380px;width:100%;box-shadow:0 10px 40px rgba(18,50,94,.12)}
+.login-card h2{font-size:18px;margin-bottom:4px}
+.login-card .muted{margin-bottom:16px}
+.login-card input{width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:10px;font-size:14px}
+.login-card .btn{width:100%;padding:10px}
+.login-msg{font-size:12px;margin-top:10px;color:var(--danger)}
+.login-msg.ok{color:var(--ok)}
+@media(max-width:700px){.formgrid{grid-template-columns:1fr}}
+@media print{header nav,.toolbar,button{display:none!important}}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>KMT 人事管理システム</h1>
+    <div class="sub">クラウド版（Supabase）— 人事情報・労務書類・評価・KPI・資産</div>
+  </div>
+  <nav id="nav"></nav>
+</header>
+<main id="main"><div class="login-wrap"><div class="muted">読み込み中…</div></div></main>
+<footer>データは Supabase（東京リージョン）に保存されます。アクセスには登録済みメールでのログインが必要です。</footer>
+<div class="modal-bg" id="modalBg"><div class="modal" id="modalBox"></div></div>
+<div id="toast"></div>
+
+<script>
+'use strict';
+/* ============================================================
+   KMT HR Management System — cloud edition (Supabase backend)
+   ============================================================ */
+const SUPABASE_URL = 'https://ndvdjzieztqbekacevxk.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_mD9o4ZovQ1un9KgyamlafA_EIgHlylK';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const DEFAULT_DOC_TEMPLATES = [
+ {id:'d01', stage:'入社前', name:'履歴書・職務経歴書', tags:['all'], note:'', sort_order:1},
+ {id:'d02', stage:'入社前', name:'内定通知書（交付）', tags:['all'], note:'会社→本人', sort_order:2},
+ {id:'d03', stage:'入社前', name:'雇用契約書・労働条件通知書', tags:['all'], note:'外国籍は母国語併記推奨', sort_order:3},
+ {id:'d04', stage:'入社前', name:'業務委託契約書', tags:['ov'], note:'海外リモートで委託契約の場合', sort_order:4},
+ {id:'d05', stage:'入社前', name:'身元保証書', tags:['jp','fr'], note:'任意', sort_order:5},
+ {id:'d06', stage:'入社前', name:'卒業証明書・資格証明書', tags:['all'], note:'必要に応じて', sort_order:6},
+ {id:'d07', stage:'入社前', name:'在留カード（両面コピー）', tags:['fr'], note:'在留資格・期限確認', sort_order:7},
+ {id:'d08', stage:'入社前', name:'パスポートコピー', tags:['fr','ov'], note:'', sort_order:8},
+ {id:'d09', stage:'入社前', name:'在留資格変更・更新許可申請', tags:['fr'], note:'就労資格への変更が必要な場合', sort_order:9},
+ {id:'d10', stage:'入社前', name:'資格外活動許可の確認', tags:['fr'], note:'留学生アルバイト等（週28時間以内）', sort_order:10},
+ {id:'d11', stage:'入社前', name:'就労資格証明書（任意）', tags:['fr'], note:'転職者の場合の確認手段', sort_order:11},
+ {id:'d20', stage:'入社時', name:'誓約書・秘密保持誓約書', tags:['all'], note:'', sort_order:20},
+ {id:'d21', stage:'入社時', name:'マイナンバー提出（本人＋扶養）', tags:['jp','fr','pt'], note:'国内居住者', sort_order:21},
+ {id:'d22', stage:'入社時', name:'基礎年金番号（年金手帳等）', tags:['ins'], note:'社会保険加入者', sort_order:22},
+ {id:'d23', stage:'入社時', name:'雇用保険被保険者証（中途）', tags:['jp','fr','pt'], note:'雇用保険加入者', sort_order:23},
+ {id:'d24', stage:'入社時', name:'前職の源泉徴収票', tags:['jp','fr','pt'], note:'年内転職者', sort_order:24},
+ {id:'d25', stage:'入社時', name:'扶養控除等申告書', tags:['jp','fr','pt'], note:'', sort_order:25},
+ {id:'d26', stage:'入社時', name:'健康保険 被扶養者（異動）届', tags:['ins'], note:'扶養家族がいる場合', sort_order:26},
+ {id:'d27', stage:'入社時', name:'給与振込口座届', tags:['all'], note:'', sort_order:27},
+ {id:'d28', stage:'入社時', name:'通勤経路・通勤手当申請', tags:['jp','fr','pt'], note:'', sort_order:28},
+ {id:'d29', stage:'入社時', name:'健康診断書（入社時）', tags:['jp','fr'], note:'', sort_order:29},
+ {id:'d30', stage:'入社時', name:'外国人雇用状況届出（雇入れ）', tags:['fr'], note:'会社→ハローワーク（義務）', sort_order:30},
+ {id:'d31', stage:'入社時', name:'社会保険 資格取得手続き', tags:['ins'], note:'会社側手続き', sort_order:31},
+ {id:'d32', stage:'入社時', name:'住民票記載事項証明書', tags:['jp','fr'], note:'必要に応じて', sort_order:32},
+ {id:'d40', stage:'在職中', name:'年末調整書類（毎年）', tags:['jp','fr','pt'], note:'保険料控除・扶養等', sort_order:40},
+ {id:'d41', stage:'在職中', name:'在留期間更新許可申請', tags:['fr'], note:'期限3ヶ月前から申請可', sort_order:41},
+ {id:'d42', stage:'在職中', name:'契約更新（有期契約）', tags:['all'], note:'契約終了日前に更新面談', sort_order:42},
+ {id:'d43', stage:'在職中', name:'定期健康診断（年1回）', tags:['jp','fr'], note:'', sort_order:43},
+ {id:'d44', stage:'在職中', name:'住所・氏名・扶養変更届', tags:['all'], note:'変更時のみ', sort_order:44},
+ {id:'d45', stage:'在職中', name:'評価面談記録', tags:['all'], note:'評価タブと連動', sort_order:45},
+ {id:'d50', stage:'退職時', name:'退職届・退職合意書', tags:['all'], note:'', sort_order:50},
+ {id:'d51', stage:'退職時', name:'貸与物返却確認書', tags:['all'], note:'資産タブと連動', sort_order:51},
+ {id:'d52', stage:'退職時', name:'秘密保持誓約書（退職時）', tags:['all'], note:'', sort_order:52},
+ {id:'d53', stage:'退職時', name:'健康保険証の回収', tags:['ins'], note:'', sort_order:53},
+ {id:'d54', stage:'退職時', name:'外国人雇用状況届出（離職）', tags:['fr'], note:'会社→ハローワーク（義務）', sort_order:54},
+ {id:'d60', stage:'退職後', name:'社会保険 資格喪失手続き', tags:['ins'], note:'退職日の翌日から5日以内', sort_order:60},
+ {id:'d61', stage:'退職後', name:'離職票の交付', tags:['jp','fr','pt'], note:'雇用保険加入者・本人希望時は必須', sort_order:61},
+ {id:'d62', stage:'退職後', name:'源泉徴収票の交付', tags:['jp','fr','pt'], note:'退職後1ヶ月以内', sort_order:62},
+ {id:'d63', stage:'退職後', name:'退職証明書（本人請求時）', tags:['all'], note:'', sort_order:63},
+ {id:'d64', stage:'退職後', name:'住民税 異動届', tags:['jp','fr'], note:'特別徴収の場合', sort_order:64},
+];
+
+const STAGES = ['入社前','入社時','在職中','退職時','退職後'];
+const DOC_STATUSES = ['未依頼','依頼中','受領','確認済','対象外'];
+const EMP_TYPES = ['正社員','契約社員','パートタイム','業務委託','海外リモート'];
+const EMP_STATUSES = ['内定','在籍','休職','退職'];
+const ZAIRYU_LIST = ['技術・人文知識・国際業務','特定技能1号','特定技能2号','技能実習','永住者','日本人の配偶者等','永住者の配偶者等','定住者','家族滞在','留学','特定活動','経営・管理','その他'];
+const ASSET_CATS = ['PC','モニター','スマートフォン','SIM/回線','ソフトウェアライセンス','鍵・カード','事務機器','その他'];
+const ASSET_STATUSES = ['在庫','貸与中','修理中','紛失','廃棄'];
+const GRADES = ['S','A','B','C','D'];
+
+/* ---------------- state ---------------- */
+let data = {departments:[], employees:[], evaluations:[], kpis:[], assets:[], docTemplates:[], allowedUsers:[]};
+let session = null;
+let view = 'dashboard';
+let empFilter = {q:'', status:'在籍', type:'', dept:''};
+let currentEmpId = null;
+let evalPeriodFilter = '';
+let kpiPeriodFilter = '';
+
+function uid(){ return crypto.randomUUID(); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function fmtDate(d){ return d?d:'—'; }
+function today(){ return new Date().toISOString().slice(0,10); }
+function daysUntil(dateStr){
+  if(!dateStr) return null;
+  const d = new Date(dateStr+'T00:00:00');
+  return Math.ceil((d - new Date(new Date().toDateString()))/86400000);
+}
+function empById(id){ return data.employees.find(e=>e.id===id); }
+function empName(id){ const e=empById(id); return e? e.nameKanji||e.nameRoma : '—'; }
+
+let toastTimer = null;
+function toast(msg, isErr){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = isErr?'err':''; t.style.display='block';
+  clearTimeout(toastTimer); toastTimer = setTimeout(()=>{ t.style.display='none'; }, isErr?6000:2000);
+}
+
+/* ---------------- db helpers ---------------- */
+async function q(promise){
+  const {data:d, error} = await promise;
+  if(error){ toast('保存エラー: '+error.message, true); throw error; }
+  return d;
+}
+const dOrNull = s=>s||null;
+function dbToEmp(r){ return {
+  id:r.id, empNo:r.emp_no, status:r.status, nameKanji:r.name_kanji, nameKana:r.name_kana, nameRoma:r.name_roma,
+  birthDate:r.birth_date||'', gender:r.gender, nationality:r.nationality, isForeign:r.is_foreign,
+  employmentType:r.employment_type, department:r.department, position:r.position,
+  hireDate:r.hire_date||'', probationEnd:r.probation_end||'', contractEnd:r.contract_end||'', resignDate:r.resign_date||'',
+  email:r.email, phone:r.phone, address:r.address,
+  emergencyName:r.emergency_name, emergencyRelation:r.emergency_relation, emergencyPhone:r.emergency_phone,
+  socialIns:r.social_ins, empInsNo:r.emp_ins_no, pensionNo:r.pension_no, myNumberCollected:r.my_number_collected,
+  zairyuStatus:r.zairyu_status, zairyuCardNo:r.zairyu_card_no, zairyuExpiry:r.zairyu_expiry||'',
+  passportNo:r.passport_no, passportExpiry:r.passport_expiry||'', notes:r.notes, docs:{}
+};}
+function empToDb(e){ return {
+  id:e.id, emp_no:e.empNo||'', status:e.status, name_kanji:e.nameKanji||'', name_kana:e.nameKana||'', name_roma:e.nameRoma||'',
+  birth_date:dOrNull(e.birthDate), gender:e.gender||'', nationality:e.nationality||'', is_foreign:!!e.isForeign,
+  employment_type:e.employmentType, department:e.department||'', position:e.position||'',
+  hire_date:dOrNull(e.hireDate), probation_end:dOrNull(e.probationEnd), contract_end:dOrNull(e.contractEnd), resign_date:dOrNull(e.resignDate),
+  email:e.email||'', phone:e.phone||'', address:e.address||'',
+  emergency_name:e.emergencyName||'', emergency_relation:e.emergencyRelation||'', emergency_phone:e.emergencyPhone||'',
+  social_ins:!!e.socialIns, emp_ins_no:e.empInsNo||'', pension_no:e.pensionNo||'', my_number_collected:!!e.myNumberCollected,
+  zairyu_status:e.zairyuStatus||'', zairyu_card_no:e.zairyuCardNo||'', zairyu_expiry:dOrNull(e.zairyuExpiry),
+  passport_no:e.passportNo||'', passport_expiry:dOrNull(e.passportExpiry), notes:e.notes||''
+};}
+function dbToEval(r){ return {id:r.id, empId:r.employee_id, period:r.period, evaluator:r.evaluator, status:r.status, goals:r.goals||[], selfScore:r.self_score, mgrScore:r.mgr_score, finalGrade:r.final_grade, comment:r.comment}; }
+function evalToDb(v){ return {id:v.id, employee_id:v.empId, period:v.period||'', evaluator:v.evaluator||'', status:v.status, goals:v.goals||[], self_score:v.selfScore||'', mgr_score:v.mgrScore||'', final_grade:v.finalGrade||'', comment:v.comment||''}; }
+function dbToKpi(r){ return {id:r.id, period:r.period, scope:r.scope, empId:r.employee_id||'', dept:r.dept, name:r.name, unit:r.unit, target:r.target, records:r.records||[], notes:r.notes}; }
+function kpiToDb(k){ return {id:k.id, period:k.period||'', scope:k.scope, employee_id:dOrNull(k.empId), dept:k.dept||'', name:k.name, unit:k.unit||'', target:k.target||'', records:k.records||[], notes:k.notes||''}; }
+function dbToAsset(r){ return {id:r.id, assetNo:r.asset_no, category:r.category, name:r.name, serial:r.serial, purchaseDate:r.purchase_date||'', price:r.price, status:r.status, assignedTo:r.assigned_to||'', lendDate:r.lend_date||'', returnDate:r.return_date||'', notes:r.notes}; }
+function assetToDb(a){ return {id:a.id, asset_no:a.assetNo||'', category:a.category, name:a.name, serial:a.serial||'', purchase_date:dOrNull(a.purchaseDate), price:a.price||'', status:a.status, assigned_to:dOrNull(a.assignedTo), lend_date:dOrNull(a.lendDate), return_date:dOrNull(a.returnDate), notes:a.notes||''}; }
+
+async function loadAll(){
+  const [deps, tpls, emps, docs, evals, kpis, assets, allowed] = await Promise.all([
+    q(sb.from('departments').select('*').order('sort_order')),
+    q(sb.from('doc_templates').select('*').order('sort_order')),
+    q(sb.from('employees').select('*')),
+    q(sb.from('employee_docs').select('*')),
+    q(sb.from('evaluations').select('*')),
+    q(sb.from('kpis').select('*')),
+    q(sb.from('assets').select('*')),
+    q(sb.from('allowed_users').select('*').order('added_at')),
+  ]);
+  data.departments = deps.map(d=>d.name);
+  data._deptRows = deps;
+  data.docTemplates = tpls.map(t=>({id:t.id, stage:t.stage, name:t.name, tags:t.tags, note:t.note, sort_order:t.sort_order}));
+  data.employees = emps.map(dbToEmp);
+  docs.forEach(r=>{
+    const e = empById(r.employee_id);
+    if(e) e.docs[r.doc_id] = {status:r.status, date:r.date||'', note:r.note||''};
+  });
+  data.evaluations = evals.map(dbToEval);
+  data.kpis = kpis.map(dbToKpi);
+  data.assets = assets.map(dbToAsset);
+  data.allowedUsers = allowed.map(a=>a.email);
+}
+
+/* ---------------- doc logic ---------------- */
+function empTags(emp){
+  const t = [];
+  if(emp.employmentType==='海外リモート'||emp.employmentType==='業務委託') t.push('ov');
+  else if(emp.employmentType==='パートタイム') t.push('pt');
+  if(emp.isForeign && !t.includes('ov')) t.push('fr');
+  if(!emp.isForeign && !t.includes('ov')) t.push('jp');
+  if(emp.socialIns) t.push('ins');
+  return t;
+}
+function docApplies(tpl, emp){
+  if(tpl.tags.includes('all')) return true;
+  const tags = empTags(emp);
+  return tpl.tags.some(t=>tags.includes(t));
+}
+function docsForEmp(emp){ return data.docTemplates.filter(t=>docApplies(t,emp)); }
+function docStateRead(emp, docId){
+  return (emp.docs && emp.docs[docId]) || {status:'未依頼', date:'', note:''};
+}
+function docProgress(emp){
+  const docs = docsForEmp(emp);
+  const relevant = docs.filter(t=>docStateRead(emp,t.id).status!=='対象外');
+  if(!relevant.length) return {done:0,total:0,pct:100};
+  const done = relevant.filter(t=>docStateRead(emp,t.id).status==='確認済').length;
+  return {done, total:relevant.length, pct:Math.round(done/relevant.length*100)};
+}
+
+/* ---------------- alerts ---------------- */
+function buildAlerts(){
+  const alerts = [];
+  data.employees.filter(e=>e.status!=='退職').forEach(e=>{
+    if(e.isForeign && e.zairyuExpiry){
+      const d = daysUntil(e.zairyuExpiry);
+      if(d!==null && d<=90) alerts.push({level:d<=30?'red':'yellow', emp:e, text:`在留期限 ${e.zairyuExpiry}（あと${d}日）— 期限3ヶ月前から更新申請可`, sort:d});
+    }
+    if(e.passportExpiry){
+      const d = daysUntil(e.passportExpiry);
+      if(d!==null && d<=180) alerts.push({level:d<=60?'red':'yellow', emp:e, text:`パスポート期限 ${e.passportExpiry}（あと${d}日）`, sort:d});
+    }
+    if(e.contractEnd){
+      const d = daysUntil(e.contractEnd);
+      if(d!==null && d<=60) alerts.push({level:d<=14?'red':'yellow', emp:e, text:`契約終了日 ${e.contractEnd}（あと${d}日）— 更新手続き要確認`, sort:d});
+    }
+    if(e.probationEnd){
+      const d = daysUntil(e.probationEnd);
+      if(d!==null && d>=0 && d<=30) alerts.push({level:'blue', emp:e, text:`試用期間終了 ${e.probationEnd}（あと${d}日）`, sort:d});
+    }
+    const pr = docProgress(e);
+    if(pr.total>0 && pr.pct<100 && e.status==='内定'){
+      const pend = pr.total - pr.done;
+      alerts.push({level:'blue', emp:e, text:`入社書類 未完了 ${pend}件（${pr.pct}%完了）`, sort:500+pend});
+    }
+  });
+  alerts.sort((a,b)=>a.sort-b.sort);
+  return alerts;
+}
+
+/* ================= AUTH ================= */
+async function boot(){
+  const {data:{session:s}} = await sb.auth.getSession();
+  session = s;
+  if(!session){ showLogin(); return; }
+  await start();
+}
+async function start(){
+  document.getElementById('main').innerHTML = '<div class="login-wrap"><div class="muted">データ読み込み中…</div></div>';
+  try{ await loadAll(); }
+  catch(e){ showLogin('データ取得に失敗しました：'+e.message); return; }
+  if(!data.allowedUsers.length){
+    document.getElementById('nav').innerHTML='';
+    document.getElementById('main').innerHTML = `
+    <div class="login-wrap"><div class="login-card">
+      <h2>アクセス権がありません</h2>
+      <p class="muted">このアカウント（${esc(session.user.email)}）は許可リストに登録されていません。管理者に「データ管理＞利用ユーザー」への追加を依頼してください。</p>
+      <button class="btn" onclick="logout()">ログアウト</button>
+    </div></div>`;
+    return;
+  }
+  render();
+}
+function showLogin(msg, ok){
+  document.getElementById('nav').innerHTML='';
+  document.getElementById('main').innerHTML = `
+  <div class="login-wrap"><div class="login-card">
+    <h2>ログイン</h2>
+    <p class="muted">KMT 人事管理システム — 許可されたメールアドレスのみ利用できます。</p>
+    <input type="email" id="lg_email" placeholder="メールアドレス" autocomplete="username">
+    <input type="password" id="lg_pass" placeholder="パスワード" autocomplete="current-password">
+    <button class="btn" onclick="login()">ログイン</button>
+    <button class="btn secondary" style="margin-top:8px" onclick="signup()">新規登録（初回のみ）</button>
+    <div class="login-msg ${ok?'ok':''}" id="lg_msg">${esc(msg||'')}</div>
+  </div></div>`;
+  const p = document.getElementById('lg_pass');
+  p.addEventListener('keydown', e=>{ if(e.key==='Enter') login(); });
+}
+async function login(){
+  const email = document.getElementById('lg_email').value.trim();
+  const pass = document.getElementById('lg_pass').value;
+  if(!email||!pass){ document.getElementById('lg_msg').textContent='メールとパスワードを入力してください'; return; }
+  const {data:d, error} = await sb.auth.signInWithPassword({email, password:pass});
+  if(error){ document.getElementById('lg_msg').textContent = 'ログイン失敗：'+error.message; return; }
+  session = d.session;
+  await start();
+}
+async function signup(){
+  const email = document.getElementById('lg_email').value.trim();
+  const pass = document.getElementById('lg_pass').value;
+  if(!email||!pass){ document.getElementById('lg_msg').textContent='メールとパスワード（6文字以上）を入力してください'; return; }
+  const {error} = await sb.auth.signUp({email, password:pass});
+  if(error){ document.getElementById('lg_msg').textContent = '登録失敗：'+error.message; return; }
+  showLogin('確認メールを送信しました。メール内のリンクをクリックしてから、ここでログインしてください。', true);
+}
+async function logout(){
+  await sb.auth.signOut();
+  session = null;
+  showLogin();
+}
+async function reloadData(){
+  toast('再読み込み中…');
+  try{ await loadAll(); render(); toast('最新データを読み込みました'); }
+  catch(e){}
+}
+
+/* ================= RENDER ================= */
+const NAV = [
+  ['dashboard','ダッシュボード'],
+  ['employees','従業員・人事情報'],
+  ['docs','労務・書類管理'],
+  ['evals','評価管理'],
+  ['kpi','KPI管理'],
+  ['assets','資産管理'],
+  ['data','データ管理'],
+];
+function renderNav(){
+  document.getElementById('nav').innerHTML = NAV.map(([k,l])=>
+    `<button class="${view===k?'active':''}" onclick="go('${k}')">${l}</button>`).join('')
+    + `<button title="最新データを取得" onclick="reloadData()">↻</button>`
+    + `<span class="userchip">${esc(session?session.user.email:'')} <a href="javascript:logout()" style="color:#9fc3f0">ログアウト</a></span>`;
+}
+function go(v){ view=v; if(v!=='employees') currentEmpId=null; render(); window.scrollTo(0,0); }
+function render(){
+  renderNav();
+  const m = document.getElementById('main');
+  if(view==='dashboard') m.innerHTML = viewDashboard();
+  else if(view==='employees') m.innerHTML = currentEmpId? viewEmpDetail(currentEmpId) : viewEmployees();
+  else if(view==='docs') m.innerHTML = viewDocs();
+  else if(view==='evals') m.innerHTML = viewEvals();
+  else if(view==='kpi') m.innerHTML = viewKpi();
+  else if(view==='assets') m.innerHTML = viewAssets();
+  else if(view==='data') m.innerHTML = viewData();
+}
+
+/* ---------------- dashboard ---------------- */
+function viewDashboard(){
+  const emps = data.employees;
+  const active = emps.filter(e=>e.status==='在籍');
+  const cnt = t=>active.filter(e=>e.employmentType===t).length;
+  const foreign = active.filter(e=>e.isForeign).length;
+  const natMap = {};
+  active.forEach(e=>{ const n=e.nationality||'未設定'; natMap[n]=(natMap[n]||0)+1; });
+  const alerts = buildAlerts();
+  const lent = data.assets.filter(a=>a.status==='貸与中').length;
+  return `
+  <div class="grid cols4">
+    <div class="stat"><div class="num">${active.length}</div><div class="lbl">在籍者数</div></div>
+    <div class="stat"><div class="num">${cnt('正社員')+cnt('契約社員')}</div><div class="lbl">正社員・契約社員</div></div>
+    <div class="stat"><div class="num">${cnt('パートタイム')}</div><div class="lbl">パートタイム</div></div>
+    <div class="stat"><div class="num">${cnt('海外リモート')+cnt('業務委託')}</div><div class="lbl">海外リモート・業務委託</div></div>
+    <div class="stat"><div class="num">${foreign}</div><div class="lbl">外国籍（国内）</div></div>
+    <div class="stat"><div class="num">${emps.filter(e=>e.status==='内定').length}</div><div class="lbl">内定者</div></div>
+    <div class="stat"><div class="num">${lent}</div><div class="lbl">貸与中資産</div></div>
+    <div class="stat"><div class="num">${alerts.filter(a=>a.level==='red').length}</div><div class="lbl">要対応アラート</div></div>
+  </div>
+  <div class="panel" style="margin-top:16px">
+    <h2>⚠️ アラート <span class="en">Residence / contract / document deadlines</span></h2>
+    ${alerts.length? alerts.map(a=>`
+      <div class="alert-item ${a.level}">
+        <b><a href="javascript:openEmp('${a.emp.id}')">${esc(a.emp.nameKanji||a.emp.nameRoma)}</a></b>
+        <span>${esc(a.text)}</span>
+      </div>`).join('') : '<div class="muted">現在アラートはありません。</div>'}
+  </div>
+  <div class="grid cols3">
+    <div class="panel">
+      <h2>国籍別在籍者</h2>
+      <table>${Object.entries(natMap).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<tr><td>${esc(k)}</td><td style="text-align:right;font-weight:700">${v}名</td></tr>`).join('')||'<tr><td class="muted">データなし</td></tr>'}</table>
+    </div>
+    <div class="panel">
+      <h2>部署別在籍者</h2>
+      <table>${(function(){const m={};active.forEach(e=>{const d=e.department||'未設定';m[d]=(m[d]||0)+1;});return Object.entries(m).map(([k,v])=>`<tr><td>${esc(k)}</td><td style="text-align:right;font-weight:700">${v}名</td></tr>`).join('')||'<tr><td class="muted">データなし</td></tr>';})()}</table>
+    </div>
+    <div class="panel">
+      <h2>書類完了状況（内定・在籍者）</h2>
+      <table>${emps.filter(e=>e.status==='内定'||e.status==='在籍').map(e=>{const p=docProgress(e);return `<tr class="clickable" onclick="openEmp('${e.id}')"><td>${esc(e.nameKanji||e.nameRoma)}</td><td style="width:110px"><div class="progress"><div style="width:${p.pct}%"></div></div></td><td style="text-align:right">${p.done}/${p.total}</td></tr>`;}).join('')||'<tr><td class="muted">データなし</td></tr>'}</table>
+    </div>
+  </div>`;
+}
+
+/* ---------------- employees ---------------- */
+function viewEmployees(){
+  const f = empFilter;
+  let list = data.employees.filter(e=>{
+    if(f.status && e.status!==f.status) return false;
+    if(f.type && e.employmentType!==f.type) return false;
+    if(f.dept && e.department!==f.dept) return false;
+    if(f.q){
+      const q=f.q.toLowerCase();
+      const hay=[e.empNo,e.nameKanji,e.nameKana,e.nameRoma,e.nationality,e.email].join(' ').toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
+    return true;
+  });
+  list.sort((a,b)=>(a.empNo||'').localeCompare(b.empNo||''));
+  return `
+  <div class="panel">
+    <h2>従業員一覧 <span class="en">Employee master（${list.length}名表示）</span></h2>
+    <div class="toolbar">
+      <input placeholder="検索：氏名・社員番号・国籍…" value="${esc(f.q)}" oninput="empFilter.q=this.value;render()" style="width:220px">
+      <select onchange="empFilter.status=this.value;render()">
+        <option value="">全ステータス</option>
+        ${EMP_STATUSES.map(s=>`<option ${f.status===s?'selected':''}>${s}</option>`).join('')}
+      </select>
+      <select onchange="empFilter.type=this.value;render()">
+        <option value="">全雇用区分</option>
+        ${EMP_TYPES.map(s=>`<option ${f.type===s?'selected':''}>${s}</option>`).join('')}
+      </select>
+      <select onchange="empFilter.dept=this.value;render()">
+        <option value="">全部署</option>
+        ${data.departments.map(s=>`<option ${f.dept===s?'selected':''}>${esc(s)}</option>`).join('')}
+      </select>
+      <div class="spacer"></div>
+      <button class="btn secondary" onclick="exportEmpCsv()">CSV出力</button>
+      <button class="btn" onclick="openEmpForm()">＋ 従業員登録</button>
+    </div>
+    <div class="tablewrap"><table>
+      <tr><th>社員番号</th><th>氏名</th><th>ローマ字</th><th>国籍</th><th>雇用区分</th><th>部署</th><th>入社日</th><th>在留資格</th><th>在留期限</th><th>書類</th><th>状態</th></tr>
+      ${list.map(e=>{
+        const p=docProgress(e);
+        const zd = e.isForeign&&e.zairyuExpiry? daysUntil(e.zairyuExpiry):null;
+        return `<tr class="clickable" onclick="openEmp('${e.id}')">
+          <td>${esc(e.empNo)}</td>
+          <td><b>${esc(e.nameKanji||e.nameRoma)}</b><br><span class="muted">${esc(e.nameKana||'')}</span></td>
+          <td>${esc(e.nameRoma||'')}</td>
+          <td>${esc(e.nationality||'')}</td>
+          <td><span class="badge ${e.employmentType==='正社員'?'b-blue':e.employmentType==='海外リモート'?'b-yellow':'b-gray'}">${esc(e.employmentType)}</span></td>
+          <td>${esc(e.department||'')}</td>
+          <td>${fmtDate(e.hireDate)}</td>
+          <td>${e.isForeign?esc(e.zairyuStatus||'未設定'):'—'}</td>
+          <td>${e.isForeign? (e.zairyuExpiry? `${e.zairyuExpiry} ${zd!==null&&zd<=90?`<span class="badge ${zd<=30?'b-red':'b-yellow'}">あと${zd}日</span>`:''}`:'<span class="badge b-red">未登録</span>') : '—'}</td>
+          <td>${p.done}/${p.total}</td>
+          <td><span class="badge ${e.status==='在籍'?'b-green':e.status==='内定'?'b-blue':e.status==='退職'?'b-gray':'b-yellow'}">${e.status}</span></td>
+        </tr>`;
+      }).join('')||'<tr><td colspan="11" class="muted">該当する従業員がいません。右上の「＋従業員登録」から追加するか、「データ管理」からサンプルデータを投入できます。</td></tr>'}
+    </table></div>
+  </div>`;
+}
+function openEmp(id){ view='employees'; currentEmpId=id; render(); window.scrollTo(0,0); }
+
+function viewEmpDetail(id){
+  const e = empById(id);
+  if(!e) { currentEmpId=null; return viewEmployees(); }
+  const p = docProgress(e);
+  const myAssets = data.assets.filter(a=>a.assignedTo===id && a.status==='貸与中');
+  const myEvals = data.evaluations.filter(v=>v.empId===id).sort((a,b)=>(b.period||'').localeCompare(a.period||''));
+  const myKpis = data.kpis.filter(k=>k.empId===id);
+  const zd = daysUntil(e.zairyuExpiry);
+  return `
+  <div class="panel">
+    <div class="detail-head">
+      <div>
+        <h2>${esc(e.nameKanji||e.nameRoma)} <span class="en">${esc(e.nameRoma||'')}</span></h2>
+        <div class="tag-row" style="margin-top:6px">
+          <span class="badge ${e.status==='在籍'?'b-green':e.status==='内定'?'b-blue':'b-gray'}">${e.status}</span>
+          <span class="badge b-blue">${esc(e.employmentType)}</span>
+          ${e.isForeign?`<span class="badge b-yellow">外国籍：${esc(e.nationality||'')}</span>`:''}
+          ${e.socialIns?'<span class="badge b-gray">社保加入</span>':''}
+        </div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn secondary" onclick="currentEmpId=null;render()">← 一覧へ</button>
+        <button class="btn" onclick="openEmpForm('${e.id}')">編集</button>
+      </div>
+    </div>
+    <div class="grid cols3" style="margin-top:14px">
+      <div>
+        <div class="section-title">基本情報</div>
+        <dl class="kv">
+          <dt>社員番号</dt><dd>${esc(e.empNo)}</dd>
+          <dt>フリガナ</dt><dd>${esc(e.nameKana||'—')}</dd>
+          <dt>生年月日</dt><dd>${fmtDate(e.birthDate)}</dd>
+          <dt>性別</dt><dd>${esc(e.gender||'—')}</dd>
+          <dt>国籍</dt><dd>${esc(e.nationality||'—')}</dd>
+          <dt>部署 / 役職</dt><dd>${esc(e.department||'—')} / ${esc(e.position||'—')}</dd>
+          <dt>入社日</dt><dd>${fmtDate(e.hireDate)}</dd>
+          <dt>試用期間終了</dt><dd>${fmtDate(e.probationEnd)}</dd>
+          <dt>契約終了日</dt><dd>${fmtDate(e.contractEnd)}</dd>
+          ${e.status==='退職'?`<dt>退職日</dt><dd>${fmtDate(e.resignDate)}</dd>`:''}
+        </dl>
+      </div>
+      <div>
+        <div class="section-title">連絡先</div>
+        <dl class="kv">
+          <dt>メール</dt><dd>${esc(e.email||'—')}</dd>
+          <dt>電話</dt><dd>${esc(e.phone||'—')}</dd>
+          <dt>住所 / 居住国</dt><dd>${esc(e.address||'—')}</dd>
+          <dt>緊急連絡先</dt><dd>${esc(e.emergencyName||'—')} ${esc(e.emergencyRelation?`(${e.emergencyRelation})`:'')}<br>${esc(e.emergencyPhone||'')}</dd>
+        </dl>
+        <div class="section-title">社会保険・税</div>
+        <dl class="kv">
+          <dt>社会保険</dt><dd>${e.socialIns?'加入':'未加入 / 対象外'}</dd>
+          <dt>雇用保険番号</dt><dd>${esc(e.empInsNo||'—')}</dd>
+          <dt>基礎年金番号</dt><dd>${esc(e.pensionNo||'—')}</dd>
+          <dt>マイナンバー</dt><dd>${e.myNumberCollected?'提出済（別途安全管理）':'未提出'}</dd>
+        </dl>
+      </div>
+      <div>
+        ${e.isForeign||e.employmentType==='海外リモート'?`
+        <div class="section-title">在留・渡航情報</div>
+        <dl class="kv">
+          <dt>在留資格</dt><dd>${esc(e.zairyuStatus||'—')}</dd>
+          <dt>在留カード番号</dt><dd>${esc(e.zairyuCardNo||'—')}</dd>
+          <dt>在留期限</dt><dd>${fmtDate(e.zairyuExpiry)} ${zd!==null&&zd<=90?`<span class="badge ${zd<=30?'b-red':'b-yellow'}">あと${zd}日</span>`:''}</dd>
+          <dt>パスポート番号</dt><dd>${esc(e.passportNo||'—')}</dd>
+          <dt>パスポート期限</dt><dd>${fmtDate(e.passportExpiry)}</dd>
+        </dl>`:''}
+        <div class="section-title">メモ</div>
+        <div style="white-space:pre-wrap;font-size:13px">${esc(e.notes||'—')}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>📄 書類チェックリスト <span class="en">${p.done}/${p.total} 完了（${p.pct}%）</span></h2>
+    <div class="progress" style="max-width:300px;margin-bottom:12px"><div style="width:${p.pct}%"></div></div>
+    ${STAGES.map(stage=>{
+      const docs = docsForEmp(e).filter(t=>t.stage===stage);
+      if(!docs.length) return '';
+      return `<div class="section-title">${stage}</div>
+      <div class="tablewrap"><table>
+        <tr><th style="width:34%">書類名</th><th style="width:110px">ステータス</th><th style="width:130px">日付</th><th>メモ</th></tr>
+        ${docs.map(t=>{
+          const st = docStateRead(e,t.id);
+          return `<tr>
+            <td>${esc(t.name)}${t.note?`<br><span class="muted">${esc(t.note)}</span>`:''}</td>
+            <td><select class="doc-status st-${st.status}" onchange="setDoc('${e.id}','${t.id}','status',this.value)">
+              ${DOC_STATUSES.map(s=>`<option ${st.status===s?'selected':''}>${s}</option>`).join('')}
+            </select></td>
+            <td><input type="date" value="${esc(st.date)}" style="border:1px solid var(--border);border-radius:6px;padding:2px 4px;font-size:12px" onchange="setDoc('${e.id}','${t.id}','date',this.value)"></td>
+            <td><input value="${esc(st.note)}" placeholder="…" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:2px 6px;font-size:12px" onchange="setDoc('${e.id}','${t.id}','note',this.value)"></td>
+          </tr>`;
+        }).join('')}
+      </table></div>`;
+    }).join('')}
+  </div>
+
+  <div class="grid cols3">
+    <div class="panel">
+      <h2>💻 貸与資産</h2>
+      ${myAssets.length? `<table>${myAssets.map(a=>`<tr><td>${esc(a.category)}</td><td><b>${esc(a.name)}</b><br><span class="muted">${esc(a.assetNo)}</span></td><td>${fmtDate(a.lendDate)}〜</td></tr>`).join('')}</table>` : '<div class="muted">貸与中の資産はありません。</div>'}
+    </div>
+    <div class="panel">
+      <h2>📈 評価履歴</h2>
+      ${myEvals.length? `<table>${myEvals.map(v=>`<tr class="clickable" onclick="openEvalForm('${v.id}')"><td>${esc(v.period)}</td><td><span class="badge ${v.finalGrade==='S'||v.finalGrade==='A'?'b-green':v.finalGrade==='B'?'b-blue':'b-yellow'}">${esc(v.finalGrade||'-')}</span></td><td class="muted">${esc(v.status)}</td></tr>`).join('')}</table>` : '<div class="muted">評価記録がありません。</div>'}
+    </div>
+    <div class="panel">
+      <h2>🎯 担当KPI</h2>
+      ${myKpis.length? `<table>${myKpis.map(k=>{const r=kpiRate(k);return `<tr class="clickable" onclick="openKpiForm('${k.id}')"><td>${esc(k.name)}</td><td>${r===null?'—':r+'%'}</td></tr>`;}).join('')}</table>` : '<div class="muted">個人KPIはありません。</div>'}
+    </div>
+  </div>`;
+}
+async function setDoc(empId, docId, field, val){
+  const e = empById(empId); if(!e) return;
+  if(!e.docs[docId]) e.docs[docId] = {status:'未依頼', date:'', note:''};
+  const st = e.docs[docId];
+  st[field]=val;
+  if(field==='status' && (val==='受領'||val==='確認済') && !st.date) st.date = today();
+  await q(sb.from('employee_docs').upsert({employee_id:empId, doc_id:docId, status:st.status, date:dOrNull(st.date), note:st.note||''}));
+  render();
+}
+
+/* ---------------- employee form ---------------- */
+function openEmpForm(id){
+  const e = id? empById(id) : {
+    id:uid(), empNo:'', status:'内定', nameKanji:'', nameKana:'', nameRoma:'', birthDate:'', gender:'',
+    nationality:'日本', isForeign:false, employmentType:'正社員', department:data.departments[0]||'', position:'',
+    hireDate:'', probationEnd:'', contractEnd:'', resignDate:'',
+    email:'', phone:'', address:'', emergencyName:'', emergencyRelation:'', emergencyPhone:'',
+    socialIns:true, empInsNo:'', pensionNo:'', myNumberCollected:false,
+    zairyuStatus:'', zairyuCardNo:'', zairyuExpiry:'', passportNo:'', passportExpiry:'',
+    notes:'', docs:{}
+  };
+  const isNew = !id;
+  modal(`
+  <h3>${isNew?'従業員登録':'従業員編集'} <span class="muted">Employee ${isNew?'registration':'edit'}</span></h3>
+  <div class="formgrid">
+    <div><label>社員番号</label><input id="f_empNo" value="${esc(e.empNo)}"></div>
+    <div><label>ステータス</label><select id="f_status">${EMP_STATUSES.map(s=>`<option ${e.status===s?'selected':''}>${s}</option>`).join('')}</select></div>
+    <div><label>雇用区分</label><select id="f_type">${EMP_TYPES.map(s=>`<option ${e.employmentType===s?'selected':''}>${s}</option>`).join('')}</select></div>
+    <div><label>氏名（漢字・通称）</label><input id="f_nameKanji" value="${esc(e.nameKanji)}"></div>
+    <div><label>フリガナ</label><input id="f_nameKana" value="${esc(e.nameKana)}"></div>
+    <div><label>ローマ字（パスポート表記）</label><input id="f_nameRoma" value="${esc(e.nameRoma)}"></div>
+    <div><label>生年月日</label><input type="date" id="f_birth" value="${esc(e.birthDate)}"></div>
+    <div><label>性別</label><select id="f_gender"><option value="">—</option>${['男性','女性','その他'].map(s=>`<option ${e.gender===s?'selected':''}>${s}</option>`).join('')}</select></div>
+    <div><label>国籍</label><input id="f_nat" value="${esc(e.nationality)}" placeholder="日本 / インドネシア / ベトナム…"></div>
+    <div><label>外国籍（在留管理対象）</label><select id="f_isForeign"><option value="0" ${!e.isForeign?'selected':''}>いいえ</option><option value="1" ${e.isForeign?'selected':''}>はい</option></select></div>
+    <div><label>部署</label><select id="f_dept">${data.departments.map(s=>`<option ${e.department===s?'selected':''}>${esc(s)}</option>`).join('')}</select></div>
+    <div><label>役職</label><input id="f_pos" value="${esc(e.position)}"></div>
+    <div><label>入社日</label><input type="date" id="f_hire" value="${esc(e.hireDate)}"></div>
+    <div><label>試用期間終了日</label><input type="date" id="f_prob" value="${esc(e.probationEnd)}"></div>
+    <div><label>契約終了日（有期の場合）</label><input type="date" id="f_cend" value="${esc(e.contractEnd)}"></div>
+    <div><label>退職日</label><input type="date" id="f_resign" value="${esc(e.resignDate)}"></div>
+  </div>
+  <div class="fieldset"><legend>連絡先 / Contact</legend><div class="formgrid">
+    <div><label>メール</label><input id="f_email" value="${esc(e.email)}"></div>
+    <div><label>電話</label><input id="f_phone" value="${esc(e.phone)}"></div>
+    <div style="grid-column:1/-1"><label>住所（海外リモートは居住国・都市）</label><input id="f_addr" value="${esc(e.address)}"></div>
+    <div><label>緊急連絡先 氏名</label><input id="f_emName" value="${esc(e.emergencyName)}"></div>
+    <div><label>続柄</label><input id="f_emRel" value="${esc(e.emergencyRelation)}"></div>
+    <div><label>緊急連絡先 電話</label><input id="f_emPhone" value="${esc(e.emergencyPhone)}"></div>
+  </div></div>
+  <div class="fieldset"><legend>社会保険・税 / Insurance & Tax</legend><div class="formgrid">
+    <div><label>社会保険加入</label><select id="f_socIns"><option value="1" ${e.socialIns?'selected':''}>加入</option><option value="0" ${!e.socialIns?'selected':''}>未加入 / 対象外</option></select></div>
+    <div><label>雇用保険 被保険者番号</label><input id="f_empIns" value="${esc(e.empInsNo)}"></div>
+    <div><label>基礎年金番号</label><input id="f_pension" value="${esc(e.pensionNo)}"></div>
+    <div><label>マイナンバー提出</label><select id="f_myNum"><option value="0" ${!e.myNumberCollected?'selected':''}>未提出</option><option value="1" ${e.myNumberCollected?'selected':''}>提出済</option></select>
+    <div class="muted" style="margin-top:2px">※番号自体はこのシステムに保存しない（安全管理措置）</div></div>
+  </div></div>
+  <div class="fieldset"><legend>在留・渡航情報 / Residence & Passport（外国籍・海外）</legend><div class="formgrid">
+    <div><label>在留資格</label><select id="f_zStatus"><option value="">—</option>${ZAIRYU_LIST.map(s=>`<option ${e.zairyuStatus===s?'selected':''}>${s}</option>`).join('')}</select></div>
+    <div><label>在留カード番号</label><input id="f_zCard" value="${esc(e.zairyuCardNo)}"></div>
+    <div><label>在留期限</label><input type="date" id="f_zExp" value="${esc(e.zairyuExpiry)}"></div>
+    <div><label>パスポート番号</label><input id="f_pNo" value="${esc(e.passportNo)}"></div>
+    <div><label>パスポート期限</label><input type="date" id="f_pExp" value="${esc(e.passportExpiry)}"></div>
+  </div></div>
+  <div class="fieldset"><legend>メモ / Notes</legend>
+    <textarea id="f_notes" rows="3" style="width:100%">${esc(e.notes)}</textarea>
+  </div>
+  <div class="modal-actions">
+    ${isNew?'':`<button class="btn danger" onclick="deleteEmp('${e.id}')" style="margin-right:auto">削除</button>`}
+    <button class="btn ghost" onclick="closeModal()">キャンセル</button>
+    <button class="btn" onclick="saveEmp('${e.id}', ${isNew})">保存</button>
+  </div>`);
+}
+async function saveEmp(id, isNew){
+  const g = i=>document.getElementById(i).value.trim();
+  let e = isNew? {id, docs:{}} : empById(id);
+  Object.assign(e,{
+    empNo:g('f_empNo'), status:g('f_status'), employmentType:g('f_type'),
+    nameKanji:g('f_nameKanji'), nameKana:g('f_nameKana'), nameRoma:g('f_nameRoma'),
+    birthDate:g('f_birth'), gender:g('f_gender'), nationality:g('f_nat'),
+    isForeign:g('f_isForeign')==='1', department:document.getElementById('f_dept').value, position:g('f_pos'),
+    hireDate:g('f_hire'), probationEnd:g('f_prob'), contractEnd:g('f_cend'), resignDate:g('f_resign'),
+    email:g('f_email'), phone:g('f_phone'), address:g('f_addr'),
+    emergencyName:g('f_emName'), emergencyRelation:g('f_emRel'), emergencyPhone:g('f_emPhone'),
+    socialIns:g('f_socIns')==='1', empInsNo:g('f_empIns'), pensionNo:g('f_pension'),
+    myNumberCollected:g('f_myNum')==='1',
+    zairyuStatus:document.getElementById('f_zStatus').value, zairyuCardNo:g('f_zCard'), zairyuExpiry:g('f_zExp'),
+    passportNo:g('f_pNo'), passportExpiry:g('f_pExp'), notes:g('f_notes')
+  });
+  if(!e.nameKanji && !e.nameRoma){ alert('氏名（漢字またはローマ字）を入力してください'); return; }
+  await q(sb.from('employees').upsert(empToDb(e)));
+  if(isNew) data.employees.push(e);
+  toast('保存しました');
+  closeModal(); currentEmpId = e.id; view='employees'; render();
+}
+async function deleteEmp(id){
+  if(!confirm('この従業員データを削除しますか？（書類記録・評価も削除、KPI・資産の紐付けは解除されます）')) return;
+  await q(sb.from('employees').delete().eq('id', id));
+  data.employees = data.employees.filter(e=>e.id!==id);
+  data.evaluations = data.evaluations.filter(v=>v.empId!==id);
+  data.kpis.forEach(k=>{ if(k.empId===id) k.empId=''; });
+  data.assets.forEach(a=>{ if(a.assignedTo===id){ a.assignedTo=''; if(a.status==='貸与中')a.status='在庫'; }});
+  toast('削除しました');
+  closeModal(); currentEmpId=null; render();
+}
+
+/* ---------------- docs overview ---------------- */
+function viewDocs(){
+  const emps = data.employees.filter(e=>e.status!=='退職' || docProgress(e).pct<100);
+  return `
+  <div class="panel">
+    <h2>労務・書類管理 <span class="en">入社前 → 入社時 → 在職中 → 退職時 → 退職後</span></h2>
+    <p class="muted" style="margin-bottom:12px">従業員ごとの提出・手続き状況の一覧です。行をクリックすると個人の書類チェックリストを開きます。書類の種類（マスタ）は「データ管理」タブで編集できます。</p>
+    <div class="tablewrap"><table>
+      <tr><th>氏名</th><th>状態</th><th>雇用区分</th>${STAGES.map(s=>`<th>${s}</th>`).join('')}<th>合計</th></tr>
+      ${emps.map(e=>{
+        const cells = STAGES.map(stage=>{
+          const docs = docsForEmp(e).filter(t=>t.stage===stage);
+          const rel = docs.filter(t=>docStateRead(e,t.id).status!=='対象外');
+          if(!rel.length) return '<td class="muted">—</td>';
+          const done = rel.filter(t=>docStateRead(e,t.id).status==='確認済').length;
+          const cls = done===rel.length?'b-green':done===0?'b-gray':'b-yellow';
+          return `<td><span class="badge ${cls}">${done}/${rel.length}</span></td>`;
+        }).join('');
+        const p = docProgress(e);
+        return `<tr class="clickable" onclick="openEmp('${e.id}')">
+          <td><b>${esc(e.nameKanji||e.nameRoma)}</b></td>
+          <td><span class="badge ${e.status==='在籍'?'b-green':e.status==='内定'?'b-blue':'b-gray'}">${e.status}</span></td>
+          <td>${esc(e.employmentType)}</td>${cells}
+          <td style="min-width:110px"><div class="progress"><div style="width:${p.pct}%"></div></div><span class="muted">${p.pct}%</span></td>
+        </tr>`;
+      }).join('')||'<tr><td colspan="9" class="muted">従業員が登録されていません。</td></tr>'}
+    </table></div>
+  </div>
+  <div class="panel">
+    <h2>ステージ別 書類マスタ（現在の設定）</h2>
+    <div class="grid cols3">
+    ${STAGES.map(stage=>`
+      <div>
+        <div class="section-title">${stage}</div>
+        <table>${data.docTemplates.filter(t=>t.stage===stage).map(t=>`
+          <tr><td>${esc(t.name)}<br><span class="muted">${tagLabel(t.tags)}${t.note?' ・ '+esc(t.note):''}</span></td></tr>`).join('')}
+        </table>
+      </div>`).join('')}
+    </div>
+  </div>`;
+}
+function tagLabel(tags){
+  const m = {all:'全員', jp:'日本人', fr:'外国籍(国内)', pt:'パート', ov:'海外/委託', ins:'社保加入者'};
+  return tags.map(t=>m[t]||t).join('・');
+}
+
+/* ---------------- evaluations ---------------- */
+function viewEvals(){
+  const periods = [...new Set(data.evaluations.map(v=>v.period))].sort().reverse();
+  let list = data.evaluations.slice();
+  if(evalPeriodFilter) list = list.filter(v=>v.period===evalPeriodFilter);
+  list.sort((a,b)=>(b.period||'').localeCompare(a.period||''));
+  return `
+  <div class="panel">
+    <h2>評価管理 <span class="en">Performance review（MBO：目標設定 → 自己評価 → 上長評価 → 確定）</span></h2>
+    <div class="toolbar">
+      <select onchange="evalPeriodFilter=this.value;render()">
+        <option value="">全期間</option>
+        ${periods.map(p=>`<option ${evalPeriodFilter===p?'selected':''}>${esc(p)}</option>`).join('')}
+      </select>
+      <div class="spacer"></div>
+      <button class="btn secondary" onclick="bulkCreateEvals()">在籍者に一括作成</button>
+      <button class="btn" onclick="openEvalForm()">＋ 評価シート作成</button>
+    </div>
+    <div class="tablewrap"><table>
+      <tr><th>期間</th><th>対象者</th><th>評価者</th><th>目標数</th><th>自己評価</th><th>上長評価</th><th>最終評価</th><th>進捗</th></tr>
+      ${list.map(v=>`
+        <tr class="clickable" onclick="openEvalForm('${v.id}')">
+          <td>${esc(v.period)}</td>
+          <td><b>${esc(empName(v.empId))}</b></td>
+          <td>${esc(v.evaluator||'')}</td>
+          <td>${(v.goals||[]).length}</td>
+          <td>${v.selfScore?esc(v.selfScore):'—'}</td>
+          <td>${v.mgrScore?esc(v.mgrScore):'—'}</td>
+          <td>${v.finalGrade?`<span class="badge ${v.finalGrade==='S'||v.finalGrade==='A'?'b-green':v.finalGrade==='B'?'b-blue':'b-yellow'}">${esc(v.finalGrade)}</span>`:'—'}</td>
+          <td><span class="badge ${v.status==='確定'?'b-green':v.status==='目標設定'?'b-gray':'b-yellow'}">${esc(v.status)}</span></td>
+        </tr>`).join('')||'<tr><td colspan="8" class="muted">評価シートがありません。「＋評価シート作成」または「在籍者に一括作成」から始めてください。</td></tr>'}
+    </table></div>
+  </div>`;
+}
+async function bulkCreateEvals(){
+  const period = prompt('評価期間を入力してください（例：2026上期）');
+  if(!period) return;
+  const created = [];
+  data.employees.filter(e=>e.status==='在籍').forEach(e=>{
+    if(!data.evaluations.some(v=>v.empId===e.id && v.period===period)){
+      created.push({id:uid(), empId:e.id, period, evaluator:'', status:'目標設定', goals:[], selfScore:'', mgrScore:'', finalGrade:'', comment:''});
+    }
+  });
+  if(!created.length){ alert('作成対象がありません。'); return; }
+  await q(sb.from('evaluations').insert(created.map(evalToDb)));
+  data.evaluations.push(...created);
+  render(); toast(created.length+'名分の評価シートを作成しました');
+}
+function openEvalForm(id){
+  const v = id? data.evaluations.find(x=>x.id===id) : {id:uid(), empId:'', period:'', evaluator:'', status:'目標設定', goals:[], selfScore:'', mgrScore:'', finalGrade:'', comment:''};
+  const isNew = !id;
+  window._evalDraft = JSON.parse(JSON.stringify(v));
+  renderEvalModal(isNew);
+}
+function renderEvalModal(isNew){
+  const v = window._evalDraft;
+  modal(`
+  <h3>${isNew?'評価シート作成':'評価シート編集'}</h3>
+  <div class="formgrid">
+    <div><label>対象者</label><select id="ev_emp">${data.employees.map(e=>`<option value="${e.id}" ${v.empId===e.id?'selected':''}>${esc(e.nameKanji||e.nameRoma)}</option>`).join('')}</select></div>
+    <div><label>評価期間（例：2026上期）</label><input id="ev_period" value="${esc(v.period)}"></div>
+    <div><label>評価者</label><input id="ev_evaluator" value="${esc(v.evaluator)}"></div>
+    <div><label>進捗ステータス</label><select id="ev_status">${['目標設定','自己評価中','上長評価中','面談待ち','確定'].map(s=>`<option ${v.status===s?'selected':''}>${s}</option>`).join('')}</select></div>
+  </div>
+  <div class="fieldset"><legend>目標（MBO）— 各目標に自己/上長スコア（1〜5）</legend>
+    <div class="tablewrap"><table>
+      <tr><th>目標</th><th style="width:70px">ｳｪｲﾄ%</th><th style="width:60px">自己</th><th style="width:60px">上長</th><th></th></tr>
+      ${v.goals.map((gl,i)=>`
+        <tr>
+          <td><input value="${esc(gl.goal)}" style="width:100%" onchange="_evalDraft.goals[${i}].goal=this.value"></td>
+          <td><input type="number" value="${esc(gl.weight)}" style="width:100%" onchange="_evalDraft.goals[${i}].weight=this.value"></td>
+          <td><input type="number" min="1" max="5" value="${esc(gl.self)}" style="width:100%" onchange="_evalDraft.goals[${i}].self=this.value"></td>
+          <td><input type="number" min="1" max="5" value="${esc(gl.mgr)}" style="width:100%" onchange="_evalDraft.goals[${i}].mgr=this.value"></td>
+          <td><button class="btn small ghost" onclick="_evalDraft.goals.splice(${i},1);renderEvalModal(${isNew})">✕</button></td>
+        </tr>`).join('')}
+    </table></div>
+    <button class="btn small secondary" style="margin-top:8px" onclick="_evalDraft.goals.push({goal:'',weight:'',self:'',mgr:''});renderEvalModal(${isNew})">＋ 目標を追加</button>
+  </div>
+  <div class="formgrid" style="margin-top:12px">
+    <div><label>自己評価（総合・任意）</label><input id="ev_self" value="${esc(v.selfScore)}"></div>
+    <div><label>上長評価（総合・任意）</label><input id="ev_mgr" value="${esc(v.mgrScore)}"></div>
+    <div><label>最終評価（S〜D）</label><select id="ev_grade"><option value="">—</option>${GRADES.map(s=>`<option ${v.finalGrade===s?'selected':''}>${s}</option>`).join('')}</select></div>
+  </div>
+  <div class="field" style="margin-top:10px"><label>面談コメント・フィードバック</label><textarea id="ev_comment" rows="3" style="width:100%">${esc(v.comment)}</textarea></div>
+  <div class="modal-actions">
+    ${isNew?'':`<button class="btn danger" onclick="deleteEval('${v.id}')" style="margin-right:auto">削除</button>`}
+    <button class="btn ghost" onclick="closeModal()">キャンセル</button>
+    <button class="btn" onclick="saveEval(${isNew})">保存</button>
+  </div>`);
+}
+async function saveEval(isNew){
+  const v = window._evalDraft;
+  v.empId = document.getElementById('ev_emp').value;
+  v.period = document.getElementById('ev_period').value.trim();
+  v.evaluator = document.getElementById('ev_evaluator').value.trim();
+  v.status = document.getElementById('ev_status').value;
+  v.selfScore = document.getElementById('ev_self').value.trim();
+  v.mgrScore = document.getElementById('ev_mgr').value.trim();
+  v.finalGrade = document.getElementById('ev_grade').value;
+  v.comment = document.getElementById('ev_comment').value;
+  if(!v.empId || !v.period){ alert('対象者と評価期間を入力してください'); return; }
+  await q(sb.from('evaluations').upsert(evalToDb(v)));
+  if(isNew) data.evaluations.push(v);
+  else{ const i = data.evaluations.findIndex(x=>x.id===v.id); if(i>=0) data.evaluations[i]=v; }
+  toast('保存しました');
+  closeModal(); render();
+}
+async function deleteEval(id){
+  if(!confirm('この評価シートを削除しますか？')) return;
+  await q(sb.from('evaluations').delete().eq('id', id));
+  data.evaluations = data.evaluations.filter(v=>v.id!==id);
+  toast('削除しました');
+  closeModal(); render();
+}
+
+/* ---------------- KPI ---------------- */
+function kpiRate(k){
+  const t = parseFloat(k.target);
+  const a = (k.records||[]).reduce((s,r)=>s+(parseFloat(r.actual)||0),0);
+  if(!t) return null;
+  return Math.round(a/t*100);
+}
+function kpiActual(k){ return (k.records||[]).reduce((s,r)=>s+(parseFloat(r.actual)||0),0); }
+function viewKpi(){
+  const periods = [...new Set(data.kpis.map(k=>k.period))].sort().reverse();
+  let list = data.kpis.slice();
+  if(kpiPeriodFilter) list = list.filter(k=>k.period===kpiPeriodFilter);
+  return `
+  <div class="panel">
+    <h2>KPI管理 <span class="en">会社・部署・個人のKPIと実績</span></h2>
+    <div class="toolbar">
+      <select onchange="kpiPeriodFilter=this.value;render()">
+        <option value="">全期間</option>
+        ${periods.map(p=>`<option ${kpiPeriodFilter===p?'selected':''}>${esc(p)}</option>`).join('')}
+      </select>
+      <div class="spacer"></div>
+      <button class="btn" onclick="openKpiForm()">＋ KPI登録</button>
+    </div>
+    <div class="tablewrap"><table>
+      <tr><th>期間</th><th>区分</th><th>担当</th><th>KPI名</th><th>目標</th><th>実績累計</th><th>達成率</th></tr>
+      ${list.map(k=>{
+        const rate = kpiRate(k);
+        return `<tr class="clickable" onclick="openKpiForm('${k.id}')">
+          <td>${esc(k.period)}</td>
+          <td><span class="badge ${k.scope==='全社'?'b-blue':k.scope==='部署'?'b-yellow':'b-gray'}">${esc(k.scope)}</span></td>
+          <td>${k.scope==='個人'? esc(empName(k.empId)) : esc(k.dept||'—')}</td>
+          <td><b>${esc(k.name)}</b></td>
+          <td>${esc(k.target)} ${esc(k.unit)}</td>
+          <td>${kpiActual(k)} ${esc(k.unit)}</td>
+          <td>${rate===null?'—':`<div style="display:flex;align-items:center;gap:8px"><div class="progress" style="flex:1;min-width:60px"><div style="width:${Math.min(rate,100)}%;background:${rate>=100?'var(--ok)':rate>=70?'var(--accent)':'var(--warn)'}"></div></div><b>${rate}%</b></div>`}</td>
+        </tr>`;
+      }).join('')||'<tr><td colspan="7" class="muted">KPIが登録されていません。例：特定技能 支援対象者数、紹介成約数、面談実施数、定期報告提出率…</td></tr>'}
+    </table></div>
+  </div>`;
+}
+function openKpiForm(id){
+  const k = id? data.kpis.find(x=>x.id===id) : {id:uid(), period:'', scope:'全社', empId:'', dept:'', name:'', unit:'件', target:'', records:[], notes:''};
+  const isNew = !id;
+  window._kpiDraft = JSON.parse(JSON.stringify(k));
+  renderKpiModal(isNew);
+}
+function renderKpiModal(isNew){
+  const k = window._kpiDraft;
+  modal(`
+  <h3>${isNew?'KPI登録':'KPI編集'}</h3>
+  <div class="formgrid">
+    <div><label>期間（例：2026年度 / 2026Q3）</label><input id="kp_period" value="${esc(k.period)}"></div>
+    <div><label>区分</label><select id="kp_scope" onchange="_kpiDraft.scope=this.value;renderKpiModal(${isNew})">${['全社','部署','個人'].map(s=>`<option ${k.scope===s?'selected':''}>${s}</option>`).join('')}</select></div>
+    ${k.scope==='個人'?`<div><label>担当者</label><select id="kp_emp">${data.employees.filter(e=>e.status!=='退職').map(e=>`<option value="${e.id}" ${k.empId===e.id?'selected':''}>${esc(e.nameKanji||e.nameRoma)}</option>`).join('')}</select></div>`:''}
+    ${k.scope==='部署'?`<div><label>部署</label><select id="kp_dept">${data.departments.map(d=>`<option ${k.dept===d?'selected':''}>${esc(d)}</option>`).join('')}</select></div>`:''}
+    <div><label>KPI名</label><input id="kp_name" value="${esc(k.name)}" placeholder="例：特定技能 支援対象者数"></div>
+    <div><label>目標値</label><input type="number" id="kp_target" value="${esc(k.target)}"></div>
+    <div><label>単位</label><input id="kp_unit" value="${esc(k.unit)}" placeholder="件 / 名 / % / 円"></div>
+  </div>
+  <div class="fieldset"><legend>実績記録</legend>
+    <table><tr><th>年月</th><th>実績</th><th>メモ</th><th></th></tr>
+    ${(k.records||[]).map((r,i)=>`
+      <tr>
+        <td><input type="month" value="${esc(r.month)}" onchange="_kpiDraft.records[${i}].month=this.value"></td>
+        <td><input type="number" value="${esc(r.actual)}" style="width:100px" onchange="_kpiDraft.records[${i}].actual=this.value"></td>
+        <td><input value="${esc(r.note||'')}" style="width:100%" onchange="_kpiDraft.records[${i}].note=this.value"></td>
+        <td><button class="btn small ghost" onclick="_kpiDraft.records.splice(${i},1);renderKpiModal(${isNew})">✕</button></td>
+      </tr>`).join('')}
+    </table>
+    <button class="btn small secondary" style="margin-top:8px" onclick="_kpiDraft.records.push({month:'',actual:'',note:''});renderKpiModal(${isNew})">＋ 実績を追加</button>
+  </div>
+  <div class="field" style="margin-top:10px"><label>メモ</label><textarea id="kp_notes" rows="2" style="width:100%">${esc(k.notes)}</textarea></div>
+  <div class="modal-actions">
+    ${isNew?'':`<button class="btn danger" onclick="deleteKpi('${k.id}')" style="margin-right:auto">削除</button>`}
+    <button class="btn ghost" onclick="closeModal()">キャンセル</button>
+    <button class="btn" onclick="saveKpi(${isNew})">保存</button>
+  </div>`);
+}
+async function saveKpi(isNew){
+  const k = window._kpiDraft;
+  k.period = document.getElementById('kp_period').value.trim();
+  k.scope = document.getElementById('kp_scope').value;
+  k.empId = k.scope==='個人'? document.getElementById('kp_emp').value : '';
+  k.dept = k.scope==='部署'? document.getElementById('kp_dept').value : '';
+  k.name = document.getElementById('kp_name').value.trim();
+  k.target = document.getElementById('kp_target').value;
+  k.unit = document.getElementById('kp_unit').value.trim();
+  k.notes = document.getElementById('kp_notes').value;
+  if(!k.name){ alert('KPI名を入力してください'); return; }
+  await q(sb.from('kpis').upsert(kpiToDb(k)));
+  if(isNew) data.kpis.push(k);
+  else{ const i = data.kpis.findIndex(x=>x.id===k.id); if(i>=0) data.kpis[i]=k; }
+  toast('保存しました');
+  closeModal(); render();
+}
+async function deleteKpi(id){
+  if(!confirm('このKPIを削除しますか？')) return;
+  await q(sb.from('kpis').delete().eq('id', id));
+  data.kpis = data.kpis.filter(k=>k.id!==id);
+  toast('削除しました');
+  closeModal(); render();
+}
+
+/* ---------------- assets ---------------- */
+function viewAssets(){
+  const list = data.assets.slice().sort((a,b)=>(a.assetNo||'').localeCompare(b.assetNo||''));
+  return `
+  <div class="panel">
+    <h2>社内資産管理 <span class="en">PC・スマホ・SIM・ライセンス等の貸与管理</span></h2>
+    <div class="toolbar">
+      <div class="spacer"></div>
+      <button class="btn secondary" onclick="exportAssetCsv()">CSV出力</button>
+      <button class="btn" onclick="openAssetForm()">＋ 資産登録</button>
+    </div>
+    <div class="tablewrap"><table>
+      <tr><th>管理番号</th><th>種別</th><th>名称・型番</th><th>シリアル</th><th>購入日</th><th>状態</th><th>貸与先</th><th>貸与日</th></tr>
+      ${list.map(a=>`
+        <tr class="clickable" onclick="openAssetForm('${a.id}')">
+          <td>${esc(a.assetNo)}</td>
+          <td>${esc(a.category)}</td>
+          <td><b>${esc(a.name)}</b></td>
+          <td>${esc(a.serial||'')}</td>
+          <td>${fmtDate(a.purchaseDate)}</td>
+          <td><span class="badge ${a.status==='貸与中'?'b-blue':a.status==='在庫'?'b-green':a.status==='紛失'?'b-red':'b-gray'}">${esc(a.status)}</span></td>
+          <td>${a.assignedTo? `<b>${esc(empName(a.assignedTo))}</b>`:'—'}</td>
+          <td>${fmtDate(a.lendDate)}</td>
+        </tr>`).join('')||'<tr><td colspan="8" class="muted">資産が登録されていません。</td></tr>'}
+    </table></div>
+  </div>`;
+}
+function openAssetForm(id){
+  const a = id? data.assets.find(x=>x.id===id) : {id:uid(), assetNo:'', category:'PC', name:'', serial:'', purchaseDate:'', price:'', status:'在庫', assignedTo:'', lendDate:'', returnDate:'', notes:''};
+  const isNew = !id;
+  modal(`
+  <h3>${isNew?'資産登録':'資産編集'}</h3>
+  <div class="formgrid">
+    <div><label>管理番号</label><input id="as_no" value="${esc(a.assetNo)}" placeholder="PC-001"></div>
+    <div><label>種別</label><select id="as_cat">${ASSET_CATS.map(s=>`<option ${a.category===s?'selected':''}>${s}</option>`).join('')}</select></div>
+    <div><label>名称・型番</label><input id="as_name" value="${esc(a.name)}" placeholder="MacBook Air M3 / iPhone 15…"></div>
+    <div><label>シリアル番号</label><input id="as_serial" value="${esc(a.serial)}"></div>
+    <div><label>購入日</label><input type="date" id="as_pdate" value="${esc(a.purchaseDate)}"></div>
+    <div><label>購入価格（円）</label><input type="number" id="as_price" value="${esc(a.price)}"></div>
+    <div><label>状態</label><select id="as_status">${ASSET_STATUSES.map(s=>`<option ${a.status===s?'selected':''}>${s}</option>`).join('')}</select></div>
+    <div><label>貸与先</label><select id="as_emp"><option value="">—</option>${data.employees.map(e=>`<option value="${e.id}" ${a.assignedTo===e.id?'selected':''}>${esc(e.nameKanji||e.nameRoma)}</option>`).join('')}</select></div>
+    <div><label>貸与日</label><input type="date" id="as_lend" value="${esc(a.lendDate)}"></div>
+    <div><label>返却日</label><input type="date" id="as_return" value="${esc(a.returnDate)}"></div>
+  </div>
+  <div class="field" style="margin-top:10px"><label>メモ</label><textarea id="as_notes" rows="2" style="width:100%">${esc(a.notes)}</textarea></div>
+  <div class="modal-actions">
+    ${isNew?'':`<button class="btn danger" onclick="deleteAsset('${a.id}')" style="margin-right:auto">削除</button>`}
+    <button class="btn ghost" onclick="closeModal()">キャンセル</button>
+    <button class="btn" onclick="saveAsset('${a.id}', ${isNew})">保存</button>
+  </div>`);
+}
+async function saveAsset(id, isNew){
+  const g = i=>document.getElementById(i).value;
+  let a = isNew? {id} : data.assets.find(x=>x.id===id);
+  Object.assign(a,{
+    assetNo:g('as_no').trim(), category:g('as_cat'), name:g('as_name').trim(), serial:g('as_serial').trim(),
+    purchaseDate:g('as_pdate'), price:g('as_price'), status:g('as_status'),
+    assignedTo:g('as_emp'), lendDate:g('as_lend'), returnDate:g('as_return'), notes:g('as_notes')
+  });
+  if(a.assignedTo && a.status==='在庫') a.status='貸与中';
+  if(!a.assignedTo && a.status==='貸与中') a.status='在庫';
+  if(!a.name){ alert('名称を入力してください'); return; }
+  await q(sb.from('assets').upsert(assetToDb(a)));
+  if(isNew) data.assets.push(a);
+  toast('保存しました');
+  closeModal(); render();
+}
+async function deleteAsset(id){
+  if(!confirm('この資産を削除しますか？')) return;
+  await q(sb.from('assets').delete().eq('id', id));
+  data.assets = data.assets.filter(a=>a.id!==id);
+  toast('削除しました');
+  closeModal(); render();
+}
+
+/* ---------------- data management ---------------- */
+function viewData(){
+  return `
+  <div class="panel">
+    <h2>データ管理 <span class="en">Backup / Import / Settings</span></h2>
+    <div class="grid cols3">
+      <div>
+        <div class="section-title">バックアップ</div>
+        <p class="muted" style="margin-bottom:8px">全データをJSONファイルとしてダウンロードします（Supabase側にもデータは残ります）。</p>
+        <button class="btn" onclick="exportJson()">JSONバックアップを保存</button>
+      </div>
+      <div>
+        <div class="section-title">取込（旧オフライン版から移行）</div>
+        <p class="muted" style="margin-bottom:8px">旧版（KMT-HR-System.html）のバックアップJSONを取り込めます。<b>現在のデータは全て置き換えられます。</b></p>
+        <input type="file" id="importFile" accept=".json" style="margin-bottom:8px">
+        <button class="btn secondary" onclick="importJson()">JSONを読み込む</button>
+      </div>
+      <div>
+        <div class="section-title">CSV出力</div>
+        <p class="muted" style="margin-bottom:8px">Excel・スプレッドシートで開ける形式で出力します。</p>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn small secondary" onclick="exportEmpCsv()">従業員</button>
+          <button class="btn small secondary" onclick="exportAssetCsv()">資産</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="panel">
+    <h2>利用ユーザー <span class="en">ここに登録されたメールだけがログイン後にデータへアクセスできます</span></h2>
+    <div class="toolbar">
+      <input type="email" id="newAllowed" placeholder="追加するメールアドレス" style="width:260px">
+      <button class="btn small" onclick="addAllowed()">追加</button>
+    </div>
+    <div class="tag-row">${data.allowedUsers.map(em=>`<span class="badge b-blue" style="font-size:13px;padding:5px 10px">${esc(em)} ${em.toLowerCase()===(session?session.user.email:'').toLowerCase()?'<span class="muted">(自分)</span>':`<a href="javascript:removeAllowed('${esc(em)}')" style="color:var(--danger);text-decoration:none;margin-left:4px">✕</a>`}</span>`).join('')}</div>
+    <p class="muted" style="margin-top:8px">※追加した人は、ログイン画面の「新規登録」でそのメール＋任意のパスワードでアカウントを作成してから利用します。</p>
+  </div>
+  <div class="panel">
+    <h2>部署マスタ</h2>
+    <div class="toolbar">
+      <input id="newDept" placeholder="新しい部署名">
+      <button class="btn small" onclick="addDept()">追加</button>
+    </div>
+    <div class="tag-row">${data.departments.map((d)=>`<span class="badge b-blue" style="font-size:13px;padding:5px 10px">${esc(d)} <a href="javascript:removeDept('${esc(d)}')" style="color:var(--danger);text-decoration:none;margin-left:4px">✕</a></span>`).join('')}</div>
+  </div>
+  <div class="panel">
+    <h2>書類マスタ編集 <span class="en">ライフサイクル別の必要書類の追加・削除</span></h2>
+    <div class="toolbar">
+      <select id="tpl_stage">${STAGES.map(s=>`<option>${s}</option>`).join('')}</select>
+      <input id="tpl_name" placeholder="書類名" style="width:220px">
+      <select id="tpl_tag">
+        <option value="all">全員</option><option value="jp">日本人</option><option value="fr">外国籍(国内)</option>
+        <option value="pt">パート</option><option value="ov">海外/委託</option><option value="ins">社保加入者</option>
+      </select>
+      <input id="tpl_note" placeholder="メモ" style="width:180px">
+      <button class="btn small" onclick="addTpl()">追加</button>
+    </div>
+    <div class="tablewrap"><table>
+      <tr><th>ステージ</th><th>書類名</th><th>対象</th><th>メモ</th><th></th></tr>
+      ${data.docTemplates.map((t)=>`
+        <tr><td>${esc(t.stage)}</td><td>${esc(t.name)}</td><td>${tagLabel(t.tags)}</td><td class="muted">${esc(t.note||'')}</td>
+        <td><button class="btn small ghost" onclick="removeTpl('${esc(t.id)}')">削除</button></td></tr>`).join('')}
+    </table></div>
+    <button class="btn ghost" style="margin-top:10px" onclick="resetTpl()">書類マスタを初期状態に戻す</button>
+  </div>
+  <div class="panel">
+    <h2>サンプルデータ</h2>
+    <p class="muted" style="margin-bottom:8px">操作を試すためのサンプルデータ（従業員5名・評価・KPI・資産）を投入します。既存データに追加されます。</p>
+    <button class="btn secondary" onclick="loadSample()">サンプルデータを投入</button>
+    <button class="btn danger" style="margin-left:8px" onclick="wipeAll()">全データを削除</button>
+  </div>
+  <div class="panel">
+    <h2>個人情報の取扱いに関する注意</h2>
+    <ul style="margin-left:18px;font-size:13px;line-height:1.9">
+      <li>マイナンバー（個人番号）そのものは<b>このシステムに入力しない</b>でください。「提出済/未提出」の管理のみ行い、番号自体は施錠保管・アクセス制限された別の仕組みで管理してください（番号法の安全管理措置）。</li>
+      <li>データはSupabase（東京リージョン）に保存され、「利用ユーザー」に登録されたメールのアカウントのみアクセスできます。</li>
+      <li>退職者・関係のない人のメールは「利用ユーザー」から速やかに削除してください。</li>
+      <li>外国人雇用状況届出（雇入れ・離職時）はハローワークへの届出が<b>法的義務</b>です。書類チェックリストで漏れを防いでください。</li>
+    </ul>
+  </div>`;
+}
+async function addAllowed(){
+  const em = document.getElementById('newAllowed').value.trim().toLowerCase();
+  if(!em || !em.includes('@')){ alert('メールアドレスを入力してください'); return; }
+  if(data.allowedUsers.some(x=>x.toLowerCase()===em)){ alert('既に登録されています'); return; }
+  await q(sb.from('allowed_users').insert({email:em}));
+  data.allowedUsers.push(em);
+  render(); toast('追加しました');
+}
+async function removeAllowed(em){
+  if(em.toLowerCase()===(session?session.user.email:'').toLowerCase()){ alert('自分自身は削除できません'); return; }
+  if(!confirm(em+' のアクセス権を削除しますか？')) return;
+  await q(sb.from('allowed_users').delete().eq('email', em));
+  data.allowedUsers = data.allowedUsers.filter(x=>x!==em);
+  render(); toast('削除しました');
+}
+async function addDept(){
+  const v = document.getElementById('newDept').value.trim();
+  if(!v) return;
+  if(data.departments.includes(v)){ alert('既に存在します'); return; }
+  await q(sb.from('departments').insert({name:v, sort_order:data.departments.length+1}));
+  data.departments.push(v);
+  render();
+}
+async function removeDept(name){
+  await q(sb.from('departments').delete().eq('name', name));
+  data.departments = data.departments.filter(d=>d!==name);
+  render();
+}
+async function addTpl(){
+  const name = document.getElementById('tpl_name').value.trim();
+  if(!name){ alert('書類名を入力してください'); return; }
+  const t = {id:'u'+uid().slice(0,8), stage:document.getElementById('tpl_stage').value, name,
+    tags:[document.getElementById('tpl_tag').value], note:document.getElementById('tpl_note').value.trim(),
+    sort_order: Math.max(0,...data.docTemplates.map(x=>x.sort_order||0))+1};
+  await q(sb.from('doc_templates').insert(t));
+  data.docTemplates.push(t);
+  render();
+}
+async function removeTpl(id){
+  if(!confirm('この書類をマスタから削除しますか？（各従業員の記録は残ります）')) return;
+  await q(sb.from('doc_templates').delete().eq('id', id));
+  data.docTemplates = data.docTemplates.filter(t=>t.id!==id);
+  render();
+}
+async function resetTpl(){
+  if(!confirm('書類マスタを初期状態（既定のテンプレート）に戻しますか？追加した書類は消えます。')) return;
+  await q(sb.from('doc_templates').delete().neq('id',''));
+  await q(sb.from('doc_templates').insert(DEFAULT_DOC_TEMPLATES));
+  data.docTemplates = JSON.parse(JSON.stringify(DEFAULT_DOC_TEMPLATES));
+  render(); toast('初期状態に戻しました');
+}
+async function wipeAll(){
+  if(!confirm('本当に全データ（従業員・評価・KPI・資産・書類記録）を削除しますか？この操作は元に戻せません。')) return;
+  if(!confirm('最終確認：バックアップは保存済みですか？削除を実行します。')) return;
+  await q(sb.from('assets').delete().neq('id','00000000-0000-0000-0000-000000000000'));
+  await q(sb.from('kpis').delete().neq('id','00000000-0000-0000-0000-000000000000'));
+  await q(sb.from('evaluations').delete().neq('id','00000000-0000-0000-0000-000000000000'));
+  await q(sb.from('employees').delete().neq('id','00000000-0000-0000-0000-000000000000'));
+  await loadAll(); render(); toast('全データを削除しました');
+}
+
+/* ---------------- export / import ---------------- */
+function download(filename, content, mime){
+  const blob = new Blob([content], {type:mime||'application/octet-stream'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
+}
+function exportJson(){
+  const out = {
+    version:2, exportedAt:new Date().toISOString(),
+    departments:data.departments,
+    docTemplates:data.docTemplates,
+    employees:data.employees,
+    evaluations:data.evaluations,
+    kpis:data.kpis,
+    assets:data.assets
+  };
+  download(`KMT-HR-backup-${today()}.json`, JSON.stringify(out, null, 1), 'application/json');
+}
+async function importJson(){
+  const f = document.getElementById('importFile').files[0];
+  if(!f){ alert('JSONファイルを選択してください'); return; }
+  const text = await f.text();
+  let d;
+  try{ d = JSON.parse(text); }catch(e){ alert('JSONの解析に失敗しました：'+e.message); return; }
+  if(!d.employees || !Array.isArray(d.employees)){ alert('形式が違います（employeesがありません）'); return; }
+  if(!confirm(`従業員${d.employees.length}名のデータを取り込みます。現在のSupabase上のデータは全て置き換えられます。よろしいですか？`)) return;
+  if(!confirm('最終確認：現在のデータのバックアップは保存済みですか？実行します。')) return;
+  toast('取込中…');
+  try{
+    // wipe
+    await q(sb.from('assets').delete().neq('id','00000000-0000-0000-0000-000000000000'));
+    await q(sb.from('kpis').delete().neq('id','00000000-0000-0000-0000-000000000000'));
+    await q(sb.from('evaluations').delete().neq('id','00000000-0000-0000-0000-000000000000'));
+    await q(sb.from('employees').delete().neq('id','00000000-0000-0000-0000-000000000000'));
+    await q(sb.from('doc_templates').delete().neq('id',''));
+    await q(sb.from('departments').delete().neq('name',''));
+    // remap old (non-uuid) ids to uuids
+    const isUuid = s=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s||'');
+    const idMap = {};
+    const mapId = old=>{ if(isUuid(old)) return old; if(!idMap[old]) idMap[old]=uid(); return idMap[old]; };
+    // departments
+    const deps = (d.departments||[]).map((name,i)=>({name, sort_order:i+1}));
+    if(deps.length) await q(sb.from('departments').insert(deps));
+    // doc templates
+    const tpls = (d.docTemplates||DEFAULT_DOC_TEMPLATES).map((t,i)=>({id:t.id, stage:t.stage, name:t.name, tags:t.tags, note:t.note||'', sort_order:t.sort_order!=null?t.sort_order:i+1}));
+    if(tpls.length) await q(sb.from('doc_templates').insert(tpls));
+    // employees
+    const emps = d.employees.map(e=>{ const ne = Object.assign({}, e, {id:mapId(e.id)}); return ne; });
+    if(emps.length) await q(sb.from('employees').insert(emps.map(empToDb)));
+    // employee docs
+    const docRows = [];
+    emps.forEach(e=>{
+      Object.entries(e.docs||{}).forEach(([docId, st])=>{
+        docRows.push({employee_id:e.id, doc_id:docId, status:st.status||'未依頼', date:dOrNull(st.date), note:st.note||''});
+      });
+    });
+    if(docRows.length) await q(sb.from('employee_docs').insert(docRows));
+    // evaluations
+    const evals = (d.evaluations||[]).map(v=>Object.assign({}, v, {id:mapId(v.id), empId:mapId(v.empId)}));
+    if(evals.length) await q(sb.from('evaluations').insert(evals.map(evalToDb)));
+    // kpis
+    const kpis = (d.kpis||[]).map(k=>Object.assign({}, k, {id:mapId(k.id), empId:k.empId?mapId(k.empId):''}));
+    if(kpis.length) await q(sb.from('kpis').insert(kpis.map(kpiToDb)));
+    // assets
+    const assets = (d.assets||[]).map(a=>Object.assign({}, a, {id:mapId(a.id), assignedTo:a.assignedTo?mapId(a.assignedTo):''}));
+    if(assets.length) await q(sb.from('assets').insert(assets.map(assetToDb)));
+    await loadAll(); render(); toast('取込が完了しました');
+  }catch(e){
+    toast('取込エラー：'+e.message, true);
+  }
+}
+function csvCell(v){ v = String(v==null?'':v); return '"'+v.replace(/"/g,'""')+'"'; }
+function exportEmpCsv(){
+  const head = ['社員番号','ステータス','氏名','フリガナ','ローマ字','生年月日','性別','国籍','外国籍','雇用区分','部署','役職','入社日','試用期間終了','契約終了日','退職日','メール','電話','住所','緊急連絡先','緊急電話','社会保険','雇用保険番号','基礎年金番号','マイナンバー提出','在留資格','在留カード番号','在留期限','パスポート番号','パスポート期限','書類完了率','メモ'];
+  const rows = data.employees.map(e=>{
+    const p = docProgress(e);
+    return [e.empNo,e.status,e.nameKanji,e.nameKana,e.nameRoma,e.birthDate,e.gender,e.nationality,e.isForeign?'はい':'いいえ',e.employmentType,e.department,e.position,e.hireDate,e.probationEnd,e.contractEnd,e.resignDate,e.email,e.phone,e.address,e.emergencyName,e.emergencyPhone,e.socialIns?'加入':'未加入',e.empInsNo,e.pensionNo,e.myNumberCollected?'済':'未',e.zairyuStatus,e.zairyuCardNo,e.zairyuExpiry,e.passportNo,e.passportExpiry,p.pct+'%',e.notes].map(csvCell).join(',');
+  });
+  download(`従業員一覧-${today()}.csv`, '﻿'+head.map(csvCell).join(',')+'\n'+rows.join('\n'), 'text/csv');
+}
+function exportAssetCsv(){
+  const head = ['管理番号','種別','名称','シリアル','購入日','価格','状態','貸与先','貸与日','返却日','メモ'];
+  const rows = data.assets.map(a=>[a.assetNo,a.category,a.name,a.serial,a.purchaseDate,a.price,a.status,a.assignedTo?empName(a.assignedTo):'',a.lendDate,a.returnDate,a.notes].map(csvCell).join(','));
+  download(`資産一覧-${today()}.csv`, '﻿'+head.map(csvCell).join(',')+'\n'+rows.join('\n'), 'text/csv');
+}
+
+/* ---------------- sample data ---------------- */
+async function loadSample(){
+  const y = new Date().getFullYear();
+  const mk = (o)=>Object.assign({id:uid(), docs:{}, socialIns:true, myNumberCollected:false, notes:''}, o);
+  const e1 = mk({empNo:'001', status:'在籍', nameKanji:'山田 太郎', nameKana:'ヤマダ タロウ', nameRoma:'YAMADA Taro', birthDate:'1985-04-12', gender:'男性', nationality:'日本', isForeign:false, employmentType:'正社員', department:'管理部', position:'部長', hireDate:'2020-04-01', email:'yamada@example.com', phone:'090-0000-0001'});
+  const e2 = mk({empNo:'002', status:'在籍', nameKanji:'グエン ティ フォン', nameKana:'グエン ティ フォン', nameRoma:'NGUYEN Thi Phuong', birthDate:'1995-08-23', gender:'女性', nationality:'ベトナム', isForeign:true, employmentType:'正社員', department:'支援部', position:'支援担当', hireDate:'2023-10-01', zairyuStatus:'技術・人文知識・国際業務', zairyuCardNo:'AB12345678CD', zairyuExpiry:`${y}-09-15`, passportNo:'N1234567', passportExpiry:`${y+2}-03-01`, email:'phuong@example.com'});
+  const e3 = mk({empNo:'003', status:'在籍', nameKanji:'佐藤 花子', nameKana:'サトウ ハナコ', nameRoma:'SATO Hanako', birthDate:'1990-01-30', gender:'女性', nationality:'日本', isForeign:false, employmentType:'パートタイム', department:'管理部', position:'事務', hireDate:'2024-06-01', socialIns:false});
+  const e4 = mk({empNo:'004', status:'在籍', nameKanji:'ブディ サントソ', nameKana:'ブディ サントソ', nameRoma:'Budi SANTOSO', birthDate:'1993-11-05', gender:'男性', nationality:'インドネシア', isForeign:false, employmentType:'海外リモート', department:'海外事業部', position:'現地コーディネーター', hireDate:'2024-01-15', address:'インドネシア・ジャカルタ', socialIns:false, email:'budi@example.com'});
+  const e5 = mk({empNo:'005', status:'内定', nameKanji:'キン ミャッ トゥ', nameKana:'キン ミャッ トゥ', nameRoma:'Khin Myat Thu', birthDate:'1998-02-14', gender:'女性', nationality:'ミャンマー', isForeign:true, employmentType:'正社員', department:'支援部', position:'支援担当（予定）', hireDate:`${y}-10-01`, zairyuStatus:'留学', zairyuExpiry:`${y+1}-03-31`, notes:'在留資格変更（技人国）申請予定'});
+  const emps = [e1,e2,e3,e4,e5];
+  [['d01','確認済'],['d02','確認済'],['d03','確認済'],['d20','確認済'],['d21','確認済'],['d27','確認済']].forEach(([d,s])=>{ e1.docs[d]={status:s,date:'2020-04-01',note:''}; });
+  [['d01','確認済'],['d03','確認済'],['d07','確認済'],['d08','確認済'],['d30','確認済'],['d21','受領']].forEach(([d,s])=>{ e2.docs[d]={status:s,date:'2023-10-01',note:''}; });
+  [['d01','確認済'],['d02','受領'],['d07','依頼中']].forEach(([d,s])=>{ e5.docs[d]={status:s,date:'',note:''}; });
+  const evals = [
+    {id:uid(), empId:e2.id, period:`${y}上期`, evaluator:'山田 太郎', status:'確定', goals:[{goal:'特定技能 定期報告の期限内提出率100%',weight:'40',self:'4',mgr:'4'},{goal:'支援対象者の面談 月1回実施',weight:'30',self:'5',mgr:'4'},{goal:'新規受入れ企業サポート 3社',weight:'30',self:'3',mgr:'3'}], selfScore:'4.0', mgrScore:'3.7', finalGrade:'A', comment:'定期報告・面談とも安定して高品質。'},
+    {id:uid(), empId:e1.id, period:`${y}上期`, evaluator:'代表', status:'面談待ち', goals:[{goal:'管理体制の整備（HRシステム導入）',weight:'50',self:'4',mgr:''},{goal:'採用2名の完了',weight:'50',self:'3',mgr:''}], selfScore:'3.5', mgrScore:'', finalGrade:'', comment:''}
+  ];
+  const kpis = [
+    {id:uid(), period:`${y}年度`, scope:'全社', empId:'', dept:'', name:'特定技能 支援対象者数', unit:'名', target:'60', records:[{month:`${y}-04`,actual:'42'},{month:`${y}-05`,actual:'3'},{month:`${y}-06`,actual:'5'}], notes:'累計で管理'},
+    {id:uid(), period:`${y}年度`, scope:'部署', empId:'', dept:'紹介事業部', name:'人材紹介 成約数', unit:'件', target:'24', records:[{month:`${y}-04`,actual:'2'},{month:`${y}-05`,actual:'1'},{month:`${y}-06`,actual:'3'}], notes:''},
+    {id:uid(), period:`${y}年度`, scope:'個人', empId:e2.id, dept:'', name:'定期面談実施数', unit:'回', target:'120', records:[{month:`${y}-04`,actual:'11'},{month:`${y}-05`,actual:'10'}], notes:'月10回目標'}
+  ];
+  const assets = [
+    {id:uid(), assetNo:'PC-001', category:'PC', name:'ThinkPad E14 Gen5', serial:'PF-XXXX01', purchaseDate:'2023-09-20', price:'128000', status:'貸与中', assignedTo:e2.id, lendDate:'2023-10-01', returnDate:'', notes:''},
+    {id:uid(), assetNo:'PC-002', category:'PC', name:'MacBook Air M2', serial:'C02XXXX', purchaseDate:'2024-01-10', price:'164800', status:'貸与中', assignedTo:e4.id, lendDate:'2024-01-15', returnDate:'', notes:'海外持出し許可済'},
+    {id:uid(), assetNo:'SP-001', category:'スマートフォン', name:'iPhone SE3', serial:'IMEI-XXXX', purchaseDate:'2023-10-01', price:'62800', status:'貸与中', assignedTo:e2.id, lendDate:'2023-10-01', returnDate:'', notes:'会社SIM付き'},
+    {id:uid(), assetNo:'PC-003', category:'PC', name:'ThinkPad E14 Gen5', serial:'PF-XXXX02', purchaseDate:'2025-03-01', price:'131000', status:'在庫', assignedTo:'', lendDate:'', returnDate:'', notes:'新入社員用'}
+  ];
+  await q(sb.from('employees').insert(emps.map(empToDb)));
+  const docRows = [];
+  emps.forEach(e=>Object.entries(e.docs).forEach(([docId,st])=>docRows.push({employee_id:e.id, doc_id:docId, status:st.status, date:dOrNull(st.date), note:st.note||''})));
+  if(docRows.length) await q(sb.from('employee_docs').insert(docRows));
+  await q(sb.from('evaluations').insert(evals.map(evalToDb)));
+  await q(sb.from('kpis').insert(kpis.map(kpiToDb)));
+  await q(sb.from('assets').insert(assets.map(assetToDb)));
+  data.employees.push(...emps);
+  data.evaluations.push(...evals);
+  data.kpis.push(...kpis);
+  data.assets.push(...assets);
+  render(); toast('サンプルデータを投入しました');
+}
+
+/* ---------------- modal ---------------- */
+function modal(html){
+  document.getElementById('modalBox').innerHTML = html;
+  document.getElementById('modalBg').classList.add('open');
+}
+function closeModal(){ document.getElementById('modalBg').classList.remove('open'); }
+document.getElementById('modalBg').addEventListener('click', e=>{ if(e.target.id==='modalBg') closeModal(); });
+
+sb.auth.onAuthStateChange((event)=>{
+  if(event==='SIGNED_OUT'){ session=null; showLogin(); }
+});
+boot();
+</script>
+</body>
+</html>
