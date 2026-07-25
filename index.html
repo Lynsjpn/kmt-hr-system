@@ -151,7 +151,7 @@ const DEFAULT_DOC_TEMPLATES = [
  {id:'d50', stage:'退職時', name:'退職届・退職合意書', tags:['all'], note:'', sort_order:50},
  {id:'d51', stage:'退職時', name:'貸与物返却確認書', tags:['all'], note:'資産タブと連動', sort_order:51},
  {id:'d52', stage:'退職時', name:'秘密保持誓約書（退職時）', tags:['all'], note:'', sort_order:52},
- {id:'d53', stage:'退職時', name:'健康保険証の回収', tags:['ins'], note:'', sort_order:53},
+ {id:'d53', stage:'退職時', name:'健康保険 資格確認書の回収', tags:['ins'], note:'交付されている場合のみ（マイナ保険証利用者は回収物なし）', sort_order:53},
  {id:'d54', stage:'退職時', name:'外国人雇用状況届出（離職）', tags:['fr'], note:'会社→ハローワーク（義務）', sort_order:54},
  {id:'d60', stage:'退職後', name:'社会保険 資格喪失手続き', tags:['ins'], note:'退職日の翌日から5日以内', sort_order:60},
  {id:'d61', stage:'退職後', name:'離職票の交付', tags:['jp','fr','pt'], note:'雇用保険加入者・本人希望時は必須', sort_order:61},
@@ -165,8 +165,8 @@ const DOC_STATUSES = ['未依頼','依頼中','受領','確認済','対象外'];
 const EMP_TYPES = ['正社員','契約社員','パートタイム','業務委託','海外リモート'];
 const EMP_STATUSES = ['内定','在籍','休職','退職'];
 const ZAIRYU_LIST = ['技術・人文知識・国際業務','特定技能1号','特定技能2号','技能実習','永住者','日本人の配偶者等','永住者の配偶者等','定住者','家族滞在','留学','特定活動','経営・管理','その他'];
-const ASSET_CATS = ['PC','モニター','スマートフォン','SIM/回線','ソフトウェアライセンス','鍵・カード','事務機器','その他'];
-const ASSET_STATUSES = ['在庫','貸与中','修理中','紛失','廃棄'];
+const ASSET_CATS = ['PC','モニター','スマートフォン','SIM/回線','ソフトウェアライセンス','クレジットカード','交通・燃料カード','鍵・カード','事務機器','その他'];
+const ASSET_STATUSES = ['在庫','貸与中','使用中','修理中','紛失','廃棄'];
 const GRADES = ['S','A','B','C','D'];
 
 /* ---------------- state ---------------- */
@@ -213,7 +213,7 @@ function dbToEmp(r){ return {
   emergencyName:r.emergency_name, emergencyRelation:r.emergency_relation, emergencyPhone:r.emergency_phone,
   socialIns:r.social_ins, empInsNo:r.emp_ins_no, pensionNo:r.pension_no, myNumberCollected:r.my_number_collected,
   zairyuStatus:r.zairyu_status, zairyuCardNo:r.zairyu_card_no, zairyuExpiry:r.zairyu_expiry||'',
-  passportNo:r.passport_no, passportExpiry:r.passport_expiry||'', notes:r.notes, docs:{}
+  passportNo:r.passport_no, passportExpiry:r.passport_expiry||'', toritsugiExpiry:r.toritsugi_expiry||'', notes:r.notes, docs:{}
 };}
 function empToDb(e){ return {
   id:e.id, emp_no:e.empNo||'', status:e.status, name_kanji:e.nameKanji||'', name_kana:e.nameKana||'', name_roma:e.nameRoma||'',
@@ -224,7 +224,7 @@ function empToDb(e){ return {
   emergency_name:e.emergencyName||'', emergency_relation:e.emergencyRelation||'', emergency_phone:e.emergencyPhone||'',
   social_ins:!!e.socialIns, emp_ins_no:e.empInsNo||'', pension_no:e.pensionNo||'', my_number_collected:!!e.myNumberCollected,
   zairyu_status:e.zairyuStatus||'', zairyu_card_no:e.zairyuCardNo||'', zairyu_expiry:dOrNull(e.zairyuExpiry),
-  passport_no:e.passportNo||'', passport_expiry:dOrNull(e.passportExpiry), notes:e.notes||''
+  passport_no:e.passportNo||'', passport_expiry:dOrNull(e.passportExpiry), toritsugi_expiry:dOrNull(e.toritsugiExpiry), notes:e.notes||''
 };}
 function dbToEval(r){ return {id:r.id, empId:r.employee_id, period:r.period, evaluator:r.evaluator, status:r.status, goals:r.goals||[], selfScore:r.self_score, mgrScore:r.mgr_score, finalGrade:r.final_grade, comment:r.comment}; }
 function evalToDb(v){ return {id:v.id, employee_id:v.empId, period:v.period||'', evaluator:v.evaluator||'', status:v.status, goals:v.goals||[], self_score:v.selfScore||'', mgr_score:v.mgrScore||'', final_grade:v.finalGrade||'', comment:v.comment||''}; }
@@ -286,20 +286,25 @@ function docProgress(emp){
 }
 
 /* ---------------- alerts ---------------- */
+function fmtDays(d){ return d<0? `期限切れ・${-d}日超過` : `あと${d}日`; }
 function buildAlerts(){
   const alerts = [];
   data.employees.filter(e=>e.status!=='退職').forEach(e=>{
     if(e.isForeign && e.zairyuExpiry){
       const d = daysUntil(e.zairyuExpiry);
-      if(d!==null && d<=90) alerts.push({level:d<=30?'red':'yellow', emp:e, text:`在留期限 ${e.zairyuExpiry}（あと${d}日）— 期限3ヶ月前から更新申請可`, sort:d});
+      if(d!==null && d<=90) alerts.push({level:d<=30?'red':'yellow', emp:e, text:`在留期限 ${e.zairyuExpiry}（${fmtDays(d)}）— 期限3ヶ月前から更新申請可`, sort:d});
     }
     if(e.passportExpiry){
       const d = daysUntil(e.passportExpiry);
-      if(d!==null && d<=180) alerts.push({level:d<=60?'red':'yellow', emp:e, text:`パスポート期限 ${e.passportExpiry}（あと${d}日）`, sort:d});
+      if(d!==null && d<=180) alerts.push({level:d<=60?'red':'yellow', emp:e, text:`パスポート期限 ${e.passportExpiry}（${fmtDays(d)}）`, sort:d});
+    }
+    if(e.toritsugiExpiry){
+      const d = daysUntil(e.toritsugiExpiry);
+      if(d!==null && d<=90) alerts.push({level:d<=30?'red':'yellow', emp:e, text:`取次者証期限 ${e.toritsugiExpiry}（${fmtDays(d)}）— 更新手続き要確認`, sort:d});
     }
     if(e.contractEnd){
       const d = daysUntil(e.contractEnd);
-      if(d!==null && d<=60) alerts.push({level:d<=14?'red':'yellow', emp:e, text:`契約終了日 ${e.contractEnd}（あと${d}日）— 更新手続き要確認`, sort:d});
+      if(d!==null && d<=60) alerts.push({level:d<=14?'red':'yellow', emp:e, text:`契約終了日 ${e.contractEnd}（${fmtDays(d)}）— 更新手続き要確認`, sort:d});
     }
     if(e.probationEnd){
       const d = daysUntil(e.probationEnd);
@@ -389,6 +394,7 @@ const NAV = [
   ['evals','評価管理'],
   ['kpi','KPI管理'],
   ['assets','資産管理'],
+  ['guide','手続きガイド'],
   ['data','データ管理'],
 ];
 function renderNav(){
@@ -407,6 +413,7 @@ function render(){
   else if(view==='evals') m.innerHTML = viewEvals();
   else if(view==='kpi') m.innerHTML = viewKpi();
   else if(view==='assets') m.innerHTML = viewAssets();
+  else if(view==='guide') m.innerHTML = viewGuide();
   else if(view==='data') m.innerHTML = viewData();
 }
 
@@ -535,8 +542,12 @@ function viewEmpDetail(id){
           ${e.socialIns?'<span class="badge b-gray">社保加入</span>':''}
         </div>
       </div>
-      <div style="display:flex;gap:8px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         <button class="btn secondary" onclick="currentEmpId=null;render()">← 一覧へ</button>
+        <select id="docSelect" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
+          ${Object.entries(PRINT_DOCS).map(([k,d])=>`<option value="${k}">${d.title}</option>`).join('')}
+        </select>
+        <button class="btn secondary" onclick="printDoc('${e.id}', document.getElementById('docSelect').value)">📄 書類作成</button>
         <button class="btn" onclick="openEmpForm('${e.id}')">編集</button>
       </div>
     </div>
@@ -553,6 +564,7 @@ function viewEmpDetail(id){
           <dt>入社日</dt><dd>${fmtDate(e.hireDate)}</dd>
           <dt>試用期間終了</dt><dd>${fmtDate(e.probationEnd)}</dd>
           <dt>契約終了日</dt><dd>${fmtDate(e.contractEnd)}</dd>
+          <dt>取次者証期限</dt><dd>${fmtDate(e.toritsugiExpiry)} ${(function(){const d=daysUntil(e.toritsugiExpiry);return d!==null&&d<=90?`<span class="badge ${d<=30?'b-red':'b-yellow'}">${fmtDays(d)}</span>`:'';})()}</dd>
           ${e.status==='退職'?`<dt>退職日</dt><dd>${fmtDate(e.resignDate)}</dd>`:''}
         </dl>
       </div>
@@ -645,7 +657,7 @@ function openEmpForm(id){
     hireDate:'', probationEnd:'', contractEnd:'', resignDate:'',
     email:'', phone:'', address:'', emergencyName:'', emergencyRelation:'', emergencyPhone:'',
     socialIns:true, empInsNo:'', pensionNo:'', myNumberCollected:false,
-    zairyuStatus:'', zairyuCardNo:'', zairyuExpiry:'', passportNo:'', passportExpiry:'',
+    zairyuStatus:'', zairyuCardNo:'', zairyuExpiry:'', passportNo:'', passportExpiry:'', toritsugiExpiry:'',
     notes:'', docs:{}
   };
   const isNew = !id;
@@ -690,6 +702,7 @@ function openEmpForm(id){
     <div><label>在留期限</label><input type="date" id="f_zExp" value="${esc(e.zairyuExpiry)}"></div>
     <div><label>パスポート番号</label><input id="f_pNo" value="${esc(e.passportNo)}"></div>
     <div><label>パスポート期限</label><input type="date" id="f_pExp" value="${esc(e.passportExpiry)}"></div>
+    <div><label>取次者証期限（申請等取次者証明書）</label><input type="date" id="f_tori" value="${esc(e.toritsugiExpiry)}"></div>
   </div></div>
   <div class="fieldset"><legend>メモ / Notes</legend>
     <textarea id="f_notes" rows="3" style="width:100%">${esc(e.notes)}</textarea>
@@ -714,7 +727,7 @@ async function saveEmp(id, isNew){
     socialIns:g('f_socIns')==='1', empInsNo:g('f_empIns'), pensionNo:g('f_pension'),
     myNumberCollected:g('f_myNum')==='1',
     zairyuStatus:document.getElementById('f_zStatus').value, zairyuCardNo:g('f_zCard'), zairyuExpiry:g('f_zExp'),
-    passportNo:g('f_pNo'), passportExpiry:g('f_pExp'), notes:g('f_notes')
+    passportNo:g('f_pNo'), passportExpiry:g('f_pExp'), toritsugiExpiry:g('f_tori'), notes:g('f_notes')
   });
   if(!e.nameKanji && !e.nameRoma){ alert('氏名（漢字またはローマ字）を入力してください'); return; }
   await q(sb.from('employees').upsert(empToDb(e)));
@@ -1017,7 +1030,7 @@ function viewAssets(){
           <td><b>${esc(a.name)}</b></td>
           <td>${esc(a.serial||'')}</td>
           <td>${fmtDate(a.purchaseDate)}</td>
-          <td><span class="badge ${a.status==='貸与中'?'b-blue':a.status==='在庫'?'b-green':a.status==='紛失'?'b-red':'b-gray'}">${esc(a.status)}</span></td>
+          <td><span class="badge ${a.status==='貸与中'||a.status==='使用中'?'b-blue':a.status==='在庫'?'b-green':a.status==='紛失'?'b-red':'b-gray'}">${esc(a.status)}</span></td>
           <td>${a.assignedTo? `<b>${esc(empName(a.assignedTo))}</b>`:'—'}</td>
           <td>${fmtDate(a.lendDate)}</td>
         </tr>`).join('')||'<tr><td colspan="8" class="muted">資産が登録されていません。</td></tr>'}
@@ -1341,6 +1354,349 @@ async function loadSample(){
   data.kpis.push(...kpis);
   data.assets.push(...assets);
   render(); toast('サンプルデータを投入しました');
+}
+
+/* ================= 書類テンプレート（印刷用） ================= */
+const COMPANY = {
+  name:'株式会社KMT',
+  rep:'代表取締役　小森 健',
+  address:'〒144-0051 東京都大田区西蒲田7-26-11 Flos蒲田4F',
+  tel:'03-6424-8852'
+};
+function jpDate(iso){
+  if(!iso) return null;
+  const d = new Date(iso+'T00:00:00');
+  return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;
+}
+function jpToday(){ return jpDate(today()); }
+function bk(v, w){ return v? esc(v) : `<span class="blank" style="min-width:${w||6}em">　</span>`; }
+function fullName(e){ return (e.nameKanji||'') + (e.nameKanji&&e.nameRoma?'（'+e.nameRoma+'）':(e.nameRoma||'')); }
+
+function docShell(title, body){
+  return `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>${esc(title)}</title><style>
+@page{size:A4;margin:18mm}
+body{font-family:"Yu Mincho","Hiragino Mincho ProN","MS Mincho",serif;font-size:10.5pt;line-height:1.9;color:#000;max-width:175mm;margin:0 auto;padding:20px}
+h1{font-size:15pt;text-align:center;letter-spacing:.4em;margin:20px 0 26px;font-weight:700}
+table{width:100%;border-collapse:collapse;font-size:9.8pt;margin:8px 0}
+td,th{border:1px solid #333;padding:5px 8px;vertical-align:top;text-align:left;font-weight:400}
+th{background:#f2f2f2;width:11em;font-weight:700}
+.right{text-align:right}.center{text-align:center}
+.blank{border-bottom:1px solid #333;display:inline-block;min-width:6em;text-align:center}
+.sig{margin-top:28px}
+.sig .line{margin:10px 0}
+.note{font-size:8.5pt;color:#444;line-height:1.6}
+.toolbar{position:fixed;top:8px;right:8px;background:#12325e;padding:8px 10px;border-radius:8px;font-family:sans-serif}
+.toolbar button{font-size:13px;padding:6px 14px;margin-left:6px;cursor:pointer}
+.disclaimer{margin-top:30px;padding:8px;border:1px dashed #999;font-size:8.5pt;color:#555;font-family:sans-serif}
+@media print{.toolbar,.disclaimer{display:none}}
+ol li{margin-bottom:6px}
+</style></head><body contenteditable="true" spellcheck="false">
+<div class="toolbar" contenteditable="false"><span style="color:#fff;font-size:11px">文面はクリックして直接編集できます</span><button onclick="window.print()">🖨 印刷 / PDF保存</button></div>
+${body}
+<div class="disclaimer">※本書式は一般的なテンプレートです。就業規則・個別の労働条件に合わせて修正のうえ使用してください。法的な判断が必要な場合は社会保険労務士・弁護士等の専門家に確認してください。（KMT人事管理システム生成）</div>
+</body></html>`;
+}
+
+const PRINT_DOCS = {
+ naitei: { title:'内定通知書', stage:'採用・内定', build(e){ return `
+  <div class="right">${jpToday()}</div>
+  <div style="margin:16px 0">${bk(fullName(e),10)} 殿</div>
+  <div class="right">${esc(COMPANY.name)}<br>${esc(COMPANY.rep)}<br>${esc(COMPANY.address)}</div>
+  <h1>内定通知書</h1>
+  <p>拝啓　時下ますますご清栄のこととお慶び申し上げます。</p>
+  <p>さて、先般は当社の採用選考にご応募いただき、誠にありがとうございました。慎重に選考いたしました結果、貴殿の採用が内定いたしましたので、ここに通知申し上げます。</p>
+  <p>つきましては、同封の入社承諾書に必要事項をご記入のうえ、<b>${bk('',8)}までに</b>ご返送ください。</p>
+  <table>
+   <tr><th>入社予定日</th><td>${bk(jpDate(e.hireDate),10)}</td></tr>
+   <tr><th>勤務地</th><td>${esc(COMPANY.address)}</td></tr>
+   <tr><th>入社日までにご提出<br>いただく書類</th><td>①入社承諾書　②住民票記載事項証明書　③卒業証明書（新卒の場合）<br>④健康診断書　⑤その他当社が指定する書類${e.isForeign?'<br>⑥在留カード（両面）の写し　⑦パスポートの写し':''}</td></tr>
+  </table>
+  <p>なお、以下の事由に該当する場合は、内定を取り消すことがあります。</p>
+  <ol>
+   <li>入社日までに提出書類の提出がない場合、または記載内容に重大な虚偽があった場合</li>
+   <li>健康状態の著しい悪化により勤務に耐えられないと認められる場合</li>
+   <li>犯罪行為その他社会的信用を著しく損なう行為があった場合</li>
+   ${e.isForeign?'<li>就労可能な在留資格が取得・更新できなかった場合</li>':''}
+  </ol>
+  <p class="right">敬具</p>`; }},
+
+ shodaku: { title:'入社承諾書', stage:'採用・内定', build(e){ return `
+  <div>${esc(COMPANY.name)}<br>${esc(COMPANY.rep)} 殿</div>
+  <h1>入社承諾書</h1>
+  <p>私は、貴社からの${bk(jpDate(e.hireDate)? jpDate(e.hireDate) : '',10)}付入社の内定通知を受け、貴社に入社することを承諾いたします。</p>
+  <p>なお、入社にあたっては貴社の就業規則その他諸規程を遵守し、誠実に勤務することを誓約いたします。万一、やむを得ない事情により入社できなくなった場合は、速やかに書面にて申し出ます。</p>
+  <div class="sig">
+   <div class="line">記入日：<span class="blank" style="min-width:10em">　</span></div>
+   <div class="line">住　所：${bk(e.address,22)}</div>
+   <div class="line">氏　名：${bk(fullName(e),14)}　　　印</div>
+  </div>`; }},
+
+ rodojoken: { title:'労働条件通知書 兼 雇用契約書', stage:'入社前', build(e){
+  const isFixed = !!e.contractEnd;
+  return `
+  <h1>労働条件通知書 兼 雇用契約書</h1>
+  <div class="right">${jpToday()}</div>
+  <p>${esc(COMPANY.name)}（以下「甲」という）と ${bk(fullName(e),12)}（以下「乙」という）とは、以下のとおり労働契約を締結する。</p>
+  <table>
+   <tr><th>契約期間</th><td>${isFixed? `期間の定めあり（${bk(jpDate(e.hireDate),9)} 〜 ${bk(jpDate(e.contractEnd),9)}）` : `期間の定めなし（入社日：${bk(jpDate(e.hireDate),9)}）`}
+    ${isFixed? `<br>更新の有無：（　更新する場合がある　・　自動更新　・　更新しない　）<br>更新の判断基準：契約期間満了時の業務量、勤務成績・態度、能力、会社の経営状況、従事している業務の進捗状況等<br><b>更新上限：（　有（通算契約期間　　年 / 更新回数　　回）・　無　）</b>`:''}
+   </td></tr>
+   <tr><th>試用期間</th><td>入社日から　${bk(e.probationEnd? jpDate(e.probationEnd)+' まで':'' ,8)}（原則3ヶ月）</td></tr>
+   <tr><th>就業の場所</th><td>【雇入れ直後】${esc(COMPANY.address)}<br>【変更の範囲】会社の定める場所（テレワークを行う場所を含む）</td></tr>
+   <tr><th>従事すべき業務</th><td>【雇入れ直後】${bk(e.position||'',14)}<br>【変更の範囲】会社の定める業務</td></tr>
+   <tr><th>始業・終業時刻<br>休憩時間</th><td>始業 ${bk('',4)}時${bk('',3)}分　〜　終業 ${bk('',4)}時${bk('',3)}分<br>休憩時間　${bk('',4)}分　／　所定時間外労働：（　有　・　無　）</td></tr>
+   <tr><th>休日</th><td>毎週　土曜日・日曜日、国民の祝日、年末年始（　月　日〜　月　日）、その他会社カレンダーによる</td></tr>
+   <tr><th>休暇</th><td>年次有給休暇：法定どおり（6ヶ月継続勤務し全労働日の8割以上出勤した場合10日）<br>その他の休暇：就業規則による</td></tr>
+   <tr><th>賃金</th><td>基本給：月給　${bk('',8)}円<br>諸手当：通勤手当（実費・上限　${bk('',6)}円）、${bk('',10)}<br>締切日・支払日：毎月${bk('',3)}日締め・当月/翌月${bk('',3)}日払い<br>支払方法：本人名義口座への振込<br>昇給：（有・無）／賞与:（有・無）／退職金:（有・無）</td></tr>
+   <tr><th>退職に関する事項</th><td>定年制（　有（　　歳）・　無　）／継続雇用制度（　有・無　）<br>自己都合退職の手続：退職する30日以上前に届け出ること<br>解雇の事由及び手続：就業規則による</td></tr>
+   <tr><th>社会保険等</th><td>健康保険（${e.socialIns?'加入':'加入・非加入'}）　厚生年金（${e.socialIns?'加入':'加入・非加入'}）　雇用保険（　加入　）　労災保険（　適用　）</td></tr>
+   ${isFixed? `<tr><th>無期転換申込権</th><td>本契約の通算契約期間が5年を超える場合、契約期間満了までに無期労働契約への転換を申し込むことができる。</td></tr>`:''}
+   <tr><th>相談窓口</th><td>部署：管理部　担当者：${bk('',8)}　（雇用管理の改善等に関する事項）</td></tr>
+   <tr><th>その他</th><td>本通知書に記載のない事項は就業規則による。${e.isForeign?'<br>乙は就労可能な在留資格を維持するものとし、在留資格の変更・更新に必要な手続に甲は協力する。':''}</td></tr>
+  </table>
+  <p>本契約の成立を証するため本書2通を作成し、甲乙記名押印のうえ各1通を保有する。</p>
+  <div class="sig">
+   <div class="line">（甲）${esc(COMPANY.address)}　${esc(COMPANY.name)}　${esc(COMPANY.rep)}　　　印</div>
+   <div class="line">（乙）住所：${bk(e.address,20)}</div>
+   <div class="line">　　　氏名：${bk(fullName(e),14)}　　　印</div>
+  </div>`; }},
+
+ seiyaku: { title:'入社誓約書 兼 秘密保持誓約書', stage:'入社時', build(e){ return `
+  <div>${esc(COMPANY.name)}<br>${esc(COMPANY.rep)} 殿</div>
+  <h1>入社誓約書 兼 秘密保持誓約書</h1>
+  <p>私は、貴社に入社するにあたり、下記の事項を遵守することを誓約いたします。</p>
+  <p class="center">記</p>
+  <ol>
+   <li>就業規則その他諸規程を遵守し、上長の指示に従い、誠実に職務を遂行します。</li>
+   <li>職務上知り得た貴社および取引先・支援対象者等の秘密情報（技術上・営業上の情報、個人情報を含む）を、在職中はもとより退職後も、第三者に開示・漏えいまたは自己もしくは第三者のために使用しません。</li>
+   <li>個人情報（マイナンバー・在留カード情報等の特定個人情報を含む）は、定められた目的・手順によってのみ取り扱います。</li>
+   <li>SNS等において、貴社の信用を毀損する投稿や秘密情報・個人情報に関わる投稿を行いません。</li>
+   <li>在職中、貴社の承認なく、貴社と競合する業務を行いません。</li>
+   <li>履歴書その他の提出書類の記載内容は真実であり、虚偽が判明した場合は貴社の処分に従います。</li>
+   <li>反社会的勢力とは一切関係がなく、今後も関係を持ちません。</li>
+   <li>故意または重大な過失により貴社に損害を与えた場合は、その損害を賠償します。</li>
+  </ol>
+  <div class="sig">
+   <div class="line">誓約日：<span class="blank" style="min-width:10em">　</span></div>
+   <div class="line">住　所：${bk(e.address,22)}</div>
+   <div class="line">氏　名：${bk(fullName(e),14)}　　　印</div>
+  </div>`; }},
+
+ mimoto: { title:'身元保証書', stage:'入社時', build(e){ return `
+  <div>${esc(COMPANY.name)}<br>${esc(COMPANY.rep)} 殿</div>
+  <h1>身元保証書</h1>
+  <table>
+   <tr><th>本人氏名</th><td>${bk(fullName(e),14)}</td></tr>
+   <tr><th>生年月日</th><td>${bk(jpDate(e.birthDate),10)}</td></tr>
+   <tr><th>入社日</th><td>${bk(jpDate(e.hireDate),10)}</td></tr>
+  </table>
+  <p>私は、上記の者（以下「本人」）が貴社に雇用されるにあたり、その身元を保証いたします。本人が故意または重大な過失により貴社に損害を与えた場合は、本人と連帯して、下記の極度額の範囲内でその損害を賠償いたします。</p>
+  <p class="center">記</p>
+  <ol>
+   <li><b>極度額：金　${bk('',10)}円</b>（民法第465条の2に基づく定め）</li>
+   <li>保証期間：入社日から　${bk('',3)}年間（5年を超えない範囲）</li>
+   <li>貴社は、本人に業務上不適任または不誠実な事跡があり保証人の責任が生じるおそれがあることを知ったときは、遅滞なく保証人に通知するものとします（身元保証法第3条）。</li>
+  </ol>
+  <div class="sig">
+   <div class="line">記入日：<span class="blank" style="min-width:10em">　</span></div>
+   <div class="line">身元保証人　住所：<span class="blank" style="min-width:20em">　</span></div>
+   <div class="line">　　　　　　氏名：<span class="blank" style="min-width:12em">　</span>　　　印</div>
+   <div class="line">　　　　　　本人との関係：<span class="blank" style="min-width:8em">　</span>　電話：<span class="blank" style="min-width:10em">　</span></div>
+  </div>`; }},
+
+ zaishoku: { title:'在職証明書', stage:'在職中', build(e){ return `
+  <h1>在職証明書</h1>
+  <table>
+   <tr><th>氏名</th><td>${bk(fullName(e),14)}</td></tr>
+   <tr><th>生年月日</th><td>${bk(jpDate(e.birthDate),10)}</td></tr>
+   ${e.isForeign?`<tr><th>国籍</th><td>${bk(e.nationality,8)}</td></tr>`:''}
+   <tr><th>住所</th><td>${bk(e.address,24)}</td></tr>
+   <tr><th>入社年月日</th><td>${bk(jpDate(e.hireDate),10)}</td></tr>
+   <tr><th>雇用形態</th><td>${esc(e.employmentType)}（期間の定め：${e.contractEnd?'有（〜'+jpDate(e.contractEnd)+'）':'無'}）</td></tr>
+   <tr><th>所属・職務内容</th><td>${bk((e.department? e.department+'　':'')+(e.position||''),16)}</td></tr>
+   <tr><th>月額給与（税込）</th><td>金　${bk('',8)}円</td></tr>
+  </table>
+  <p>上記の者は、当社に在職していることを証明いたします。</p>
+  <div class="sig">
+   <div class="line right">${jpToday()}</div>
+   <div class="line right">${esc(COMPANY.address)}</div>
+   <div class="line right">${esc(COMPANY.name)}　${esc(COMPANY.rep)}　　　印</div>
+   <div class="line right">TEL：${esc(COMPANY.tel)}</div>
+  </div>`; }},
+
+ henkyaku: { title:'貸与物返却確認書', stage:'退職時', build(e){
+  const assets = data.assets.filter(a=>a.assignedTo===e.id && (a.status==='貸与中'||a.status==='使用中'));
+  const rows = assets.map(a=>`<tr><td>${esc(a.assetNo)}</td><td>${esc(a.category)}</td><td>${esc(a.name)}${a.serial?'（'+esc(a.serial)+'）':''}</td><td class="center" style="width:7em">　月　日</td><td class="center" style="width:4em">□</td></tr>`).join('');
+  const extra = '<tr><td>　</td><td>　</td><td>　</td><td class="center">　月　日</td><td class="center">□</td></tr>'.repeat(Math.max(0, 4-assets.length));
+  return `
+  <h1>貸与物返却確認書</h1>
+  <table>
+   <tr><th>氏名</th><td>${bk(fullName(e),14)}</td><th>退職日</th><td>${bk(jpDate(e.resignDate),10)}</td></tr>
+  </table>
+  <p>下記の貸与物を返却したことを確認します。</p>
+  <table>
+   <tr><th style="width:6em">管理番号</th><th style="width:8em">種別</th><th>品名</th><th style="width:7em">返却日</th><th style="width:4em">確認</th></tr>
+   ${rows}${extra}
+  </table>
+  <p>また、以下の事項を誓約します。</p>
+  <ol>
+   <li>健康保険の資格確認書（交付されている場合・本人分および被扶養者分）を返却しました。</li>
+   <li>業務データ・アカウント情報等を私物端末・私的クラウド等に保存していないこと、保存していた場合は完全に削除したことを誓約します。</li>
+   <li>その他会社から貸与・支給された物品はすべて返却済みです。</li>
+  </ol>
+  <div class="sig">
+   <div class="line">本人署名：${bk('',14)}　　　日付：<span class="blank" style="min-width:8em">　</span></div>
+   <div class="line">会社確認者署名：<span class="blank" style="min-width:12em">　</span>　　　日付：<span class="blank" style="min-width:8em">　</span></div>
+  </div>`; }},
+
+ taishoku_todoke: { title:'退職届', stage:'退職時', build(e){ return `
+  <h1>退職届</h1>
+  <div>${esc(COMPANY.name)}<br>${esc(COMPANY.rep)} 殿</div>
+  <p style="margin-top:30px">私儀、</p>
+  <p>このたび一身上の都合により、<span class="blank" style="min-width:5em">　</span>年<span class="blank" style="min-width:3em">　</span>月<span class="blank" style="min-width:3em">　</span>日をもって退職いたしたく、ここにお届けいたします。</p>
+  <div class="sig">
+   <div class="line right">届出日：<span class="blank" style="min-width:9em">　</span></div>
+   <div class="line right">所属：${bk(e.department,10)}</div>
+   <div class="line right">氏名：${bk(fullName(e),14)}　　　印</div>
+  </div>`; }},
+
+ taishoku_himitsu: { title:'秘密保持誓約書（退職時）', stage:'退職時', build(e){ return `
+  <div>${esc(COMPANY.name)}<br>${esc(COMPANY.rep)} 殿</div>
+  <h1>秘密保持誓約書（退職時）</h1>
+  <p>私は、貴社を退職するにあたり、下記の事項を誓約いたします。</p>
+  <p class="center">記</p>
+  <ol>
+   <li>在職中に知り得た貴社および取引先・支援対象者等に関する秘密情報（技術上・営業上の情報、顧客情報、個人情報を含む）を、退職後も第三者に開示・漏えいせず、自己または第三者のために使用しません。</li>
+   <li>秘密情報が記録された書類・データ等の原本および複製物は、すべて貴社に返還または貴社の指示に従い破棄し、自ら保有しません。</li>
+   <li>貴社の従業員・支援対象者・取引先に対して、退職後に不当な勧誘行為を行いません。</li>
+   <li>本誓約に違反して貴社に損害を与えた場合は、その損害を賠償します。</li>
+  </ol>
+  <div class="sig">
+   <div class="line">誓約日：<span class="blank" style="min-width:10em">　</span></div>
+   <div class="line">住　所：${bk(e.address,22)}</div>
+   <div class="line">氏　名：${bk(fullName(e),14)}　　　印</div>
+  </div>`; }},
+
+ taishoku_shomei: { title:'退職証明書', stage:'退職後', build(e){ return `
+  <h1>退職証明書</h1>
+  <table>
+   <tr><th>氏名</th><td>${bk(fullName(e),14)}</td></tr>
+   <tr><th>生年月日</th><td>${bk(jpDate(e.birthDate),10)}</td></tr>
+   <tr><th>使用期間</th><td>${bk(jpDate(e.hireDate),9)}　〜　${bk(jpDate(e.resignDate),9)}</td></tr>
+   <tr><th>業務の種類</th><td>${bk(e.position||'',14)}</td></tr>
+   <tr><th>その事業における地位</th><td>${bk((e.department? e.department+'　':'')+(e.position||''),14)}</td></tr>
+   <tr><th>賃金</th><td>月額　金　${bk('',8)}円</td></tr>
+   <tr><th>退職の事由</th><td>（　自己都合退職　・　契約期間満了　・　定年　・　会社都合（解雇：理由　　　　　）・　その他　）</td></tr>
+  </table>
+  <p class="note">※労働基準法第22条に基づき、労働者の請求しない事項は記入しません（不要な行は削除してください）。</p>
+  <p>上記のとおり相違ないことを証明します。</p>
+  <div class="sig">
+   <div class="line right">${jpToday()}</div>
+   <div class="line right">${esc(COMPANY.address)}</div>
+   <div class="line right">${esc(COMPANY.name)}　${esc(COMPANY.rep)}　　　印</div>
+  </div>`; }},
+};
+
+function printDoc(empId, key){
+  const e = empById(empId); if(!e) return;
+  const t = PRINT_DOCS[key]; if(!t) return;
+  const w = window.open('', '_blank');
+  if(!w){ alert('ポップアップがブロックされました。ブラウザの設定でこのサイトのポップアップを許可してください。'); return; }
+  w.document.write(docShell(t.title, t.build(e)));
+  w.document.close();
+}
+
+/* ================= 手続きガイド ================= */
+function guideTable(rows){
+  return `<div class="tablewrap"><table>
+    <tr><th style="width:34%">やること・書類</th><th style="width:26%">期限・法的根拠</th><th>HR実務メモ</th></tr>
+    ${rows.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td class="muted">${r[2]}</td></tr>`).join('')}
+  </table></div>`;
+}
+function viewGuide(){
+  return `
+  <div class="panel">
+    <h2>労務管理 手続きガイド <span class="en">採用 → 入社 → 在職 → 退職 → 退職後（2026年7月時点）</span></h2>
+    <p class="muted">社内HR担当者向けの実務フローです。期限は法令に基づく代表的なものです。個別判断が必要な場合は社労士等へ確認してください。各書類テンプレートは、従業員詳細画面の「📄書類作成」から本人情報入りで出力できます。</p>
+  </div>
+
+  <div class="panel"><h2>① 採用・募集・選考</h2>
+  ${guideTable([
+   ['求人票の作成（労働条件の明示）','募集時に明示義務（職業安定法5条の3）。2024年4月〜「業務内容・就業場所の変更の範囲」「有期契約の更新上限」も明示','業務内容／契約期間／試用期間／就業場所／労働時間／賃金／保険／募集者名称を漏れなく記載'],
+   ['応募受付・面接','—','履歴書・職務経歴書を受領。本籍・家族・宗教・支持政党等、適性と関係ない質問はNG（就職差別につながる）'],
+   ['<b>外国人：在留カードの確認</b>','雇入れ前に必ず原本確認','①在留資格が業務内容と合うか ②在留期限 ③資格外活動許可の有無（留学生・家族滞在は週28時間以内）。出入国在留管理庁の失効情報照会で番号確認'],
+   ['内定通知・入社承諾書の受領','—','📄「内定通知書」「入社承諾書」テンプレートを使用。内定＝労働契約成立（取消は解雇に準じ制限あり）'],
+   ['不採用者への連絡・応募書類の処理','—','応募書類は返却または責任をもって破棄（個人情報保護）'],
+  ])}</div>
+
+  <div class="panel"><h2>② 入社前（内定〜入社日）</h2>
+  ${guideTable([
+   ['労働条件通知書 兼 雇用契約書の締結','入社日までに書面交付義務（労基法15条）。2024年4月改正の明示事項に対応','📄「労働条件通知書兼雇用契約書」テンプレート。外国籍には母国語・やさしい日本語の補足説明を推奨（厚労省の外国語版様式も活用）'],
+   ['<b>外国人：在留資格の変更・更新</b>','入社日までに就労可能な在留資格を取得','転職者は「就労資格証明書」の取得も検討。留学→技人国等の変更は2〜3ヶ月かかるため早めに申請'],
+   ['入社案内の送付','—','持ち物（年金手帳・雇用保険被保険者証・源泉徴収票・口座情報・マイナンバー等）、初日のスケジュールを案内'],
+   ['身元保証書（任意）','—','📄テンプレート。民法改正により<b>極度額の記載がないと無効</b>。期間は最長5年'],
+   ['備品・アカウント準備','—','PC・スマホ等を資産管理タブで割当。メール・各種アカウント発行'],
+  ])}</div>
+
+  <div class="panel"><h2>③ 入社時（入社日〜1ヶ月）</h2>
+  ${guideTable([
+   ['<b>健康保険・厚生年金 資格取得届</b>','<b>入社日から5日以内</b>（年金事務所）','e-Gov電子申請可。扶養家族がいれば被扶養者（異動）届も同時に'],
+   ['<b>雇用保険 資格取得届</b>','<b>入社月の翌月10日まで</b>（ハローワーク）','外国人は氏名・国籍・在留資格・期限を届書に記載（これが外国人雇用状況届出を兼ねる）'],
+   ['<b>外国人雇用状況届出（雇保非加入者）</b>','<b>入社月の翌月末日まで</b>','週20時間未満のパート等雇用保険に入らない外国人は様式3で別途届出。<b>届出漏れは30万円以下の罰金</b>'],
+   ['誓約書・秘密保持誓約書の受領','入社日','📄テンプレート'],
+   ['マイナンバーの収集','入社後速やかに','利用目的を明示し、本人確認のうえ収集。<b>このシステムには番号自体を保存しない</b>（提出状況のみ管理）'],
+   ['法定三帳簿の整備','入社時に作成','労働者名簿・賃金台帳・出勤簿。本システムの従業員情報＋Money Forward勤怠で対応'],
+   ['雇入時健康診断','入社前3ヶ月以内の診断書提出 or 入社時実施（安衛則43条）','—'],
+   ['住民税の特別徴収切替','—','前職から異動届を引き継ぐ or 普通徴収→特別徴収切替申請'],
+   ['書類チェックリストの消込','—','労務・書類管理タブで本人ごとの提出状況を管理'],
+  ])}</div>
+
+  <div class="panel"><h2>④ 在職中（年間・随時業務）</h2>
+  ${guideTable([
+   ['定期健康診断','年1回（安衛則44条）','結果は5年保存。ストレスチェックは現在50人以上の事業場で義務（50人未満への義務化が2028年4月施行予定）'],
+   ['社会保険の加入範囲の確認','—','現在、被保険者51人未満の企業はパートは「正社員の3/4以上」基準のみ。2027年10月から企業規模要件が段階的に撤廃予定のため、短時間パートの加入義務化に注意'],
+   ['年次有給休暇の管理','付与日から1年以内に<b>年5日取得させる義務</b>（10日以上付与者）','年休管理簿を作成・5年（当分の間3年）保存。違反は30万円以下の罰金'],
+   ['社会保険 算定基礎届','毎年<b>7月1日〜7月10日</b>','4〜6月の報酬で標準報酬月額を決定'],
+   ['労働保険 年度更新','毎年<b>6月1日〜7月10日</b>','労災・雇用保険料の申告納付'],
+   ['年末調整','毎年11〜12月','扶養控除等申告書・保険料控除申告書等を回収。外国人の国外扶養親族は送金証明等が必要'],
+   ['36協定の締結・届出','時間外労働をさせる場合は事前に。毎年更新が一般的','労基署へ届出（e-Gov可）'],
+   ['就業規則','常時10人以上の事業場は作成・届出義務','変更時は意見聴取＋届出＋周知'],
+   ['<b>外国人：在留期間更新</b>','期限の<b>3ヶ月前から申請可</b>','ダッシュボードのアラートで管理。更新中は「特例期間」で最長2ヶ月就労可'],
+   ['<b>取次者証の更新</b>','期限前に更新講習・申請','登録支援機関の取次業務に必須。アラートで管理'],
+   ['有期契約の更新・雇止め','3回以上更新 or 1年超勤務者の雇止めは<b>30日前までに予告</b>','通算5年超で無期転換申込権が発生（労契法18条）'],
+   ['随時改定（月額変更届）','固定給に大幅変動があった月から3ヶ月後','2等級以上の差が出たら速やかに'],
+   ['評価・昇給','評価管理タブで運用','—'],
+  ])}</div>
+
+  <div class="panel"><h2>⑤ 退職時（申出〜最終出社）</h2>
+  ${guideTable([
+   ['退職届の受理','民法上は申入れから<b>2週間</b>で退職可（民法627条・就業規則で30日前と定めても2週間が法的下限）','📄「退職届」テンプレート。退職日・有給消化・住民税の精算方法（1〜5月退職は原則一括徴収）を本人と確認'],
+   ['（会社都合の場合）解雇予告','<b>30日前に予告</b> or 30日分以上の解雇予告手当（労基法20条）','解雇は客観的合理性・社会的相当性が必要。必ず専門家に相談'],
+   ['貸与物の返却','最終出社日まで','📄「貸与物返却確認書」— 資産管理タブの貸与中資産が自動で一覧に入る。返却後は資産のステータスを在庫に変更'],
+   ['健康保険 資格確認書の回収','退職日まで','2024年12月以降、従来の保険証は失効済み。回収対象は<b>資格確認書</b>（交付されている場合のみ）。マイナ保険証利用者は回収物なし'],
+   ['秘密保持誓約書（退職時）','最終出社日まで','📄テンプレート'],
+   ['アカウント停止・引継ぎ','最終出社日','メール・SaaS・タイムズカー等の停止。書類チェックリスト退職時欄で消込'],
+  ])}</div>
+
+  <div class="panel"><h2>⑥ 退職後</h2>
+  ${guideTable([
+   ['<b>社会保険 資格喪失届</b>','<b>退職日の翌日から5日以内</b>（年金事務所）','保険証を添付して返却'],
+   ['<b>雇用保険 資格喪失届＋離職証明書</b>','<b>退職日の翌々日から10日以内</b>（ハローワーク）','離職票は本人が希望する場合（59歳以上は必須）交付。離職理由の記載は失業給付に影響するため慎重に'],
+   ['<b>外国人雇用状況届出(離職)</b>','雇保加入者は資格喪失届が兼ねる／非加入者は<b>離職月の翌月末日まで</b>','届出漏れは30万円以下の罰金'],
+   ['源泉徴収票の交付','<b>退職後1ヶ月以内</b>','年内再就職先での年末調整に必要'],
+   ['住民税 異動届','退職月の翌月10日まで','一括徴収 or 普通徴収切替 or 転職先へ引継ぎ'],
+   ['退職証明書','本人の請求があれば遅滞なく交付（労基法22条・退職後2年間）','📄テンプレート。本人が請求しない事項は記載不可'],
+   ['<b>外国人本人への案内</b>','「契約機関に関する届出」は本人が<b>14日以内</b>に入管へ届出','会社の義務ではないが、支援として案内。国民健康保険・年金の切替、脱退一時金（厚年6ヶ月以上で帰国者）も案内すると親切'],
+   ['書類の保存','労働者名簿・賃金台帳等は<b>5年保存</b>（当分の間3年の経過措置）','退職者データはシステム上「退職」ステータスで保持'],
+  ])}</div>
+
+  <div class="panel"><h2>📄 書類テンプレート一覧</h2>
+  <p class="muted" style="margin-bottom:10px">従業員詳細画面（従業員一覧→本人をクリック）右上の「📄書類作成」から、本人の情報が入った状態で出力できます。画面上で文面を直接編集し、「印刷/PDF保存」で仕上げてください。</p>
+  <div class="tablewrap"><table>
+    <tr><th>テンプレート</th><th>使う場面</th></tr>
+    ${Object.values(PRINT_DOCS).map(d=>`<tr><td><b>${esc(d.title)}</b></td><td>${esc(d.stage)}</td></tr>`).join('')}
+  </table></div>
+  </div>`;
 }
 
 /* ---------------- modal ---------------- */
