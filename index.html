@@ -55,7 +55,8 @@ button.btn.ghost{background:#fff;color:var(--sub);border:1px solid var(--border)
 .toolbar .spacer{flex:1}
 .modal-bg{position:fixed;inset:0;background:rgba(15,23,42,.5);display:none;align-items:flex-start;justify-content:center;padding:30px 12px;overflow:auto;z-index:50}
 .modal-bg.open{display:flex}
-.modal{background:#fff;border-radius:12px;max-width:860px;width:100%;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.modal{background:#fff;border-radius:12px;max-width:1000px;width:100%;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.center{text-align:center}
 .modal h3{font-size:16px;margin-bottom:14px}
 .formgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px 14px}
 .formgrid label,.field label{display:block;font-size:11px;font-weight:700;color:var(--sub);margin-bottom:3px}
@@ -169,6 +170,61 @@ const ASSET_CATS = ['PC','モニター','スマートフォン','SIM/回線','�
 const ASSET_STATUSES = ['在庫','貸与中','使用中','修理中','紛失','廃棄'];
 const GRADES = ['S','A','B','C','D'];
 
+/* ===== 評価シート2026新版 マスタ ===== */
+const EVAL_ROLES = {
+  '紹介営業':{a:60,b:30,c:10},
+  '支援担当':{a:50,b:35,c:15},
+  'マーケティング':{a:50,b:35,c:15},
+  'バックオフィス':{a:40,b:40,c:20},
+};
+const DEPT_ROLE = {'支援部':'支援担当','紹介事業部':'紹介営業','海外事業部':'マーケティング','管理部':'バックオフィス'};
+const EVAL_STATUSES = ['目標設定','自己評価中','上長評価中','面談待ち','確定'];
+const RANK_TABLE = [
+  [4.5,'S',1.3,'8,000〜10,000円'],
+  [3.7,'A',1.15,'5,000〜7,000円'],
+  [2.8,'B',1.0,'2,000〜4,000円'],
+  [2.0,'C',0.8,'0円'],
+  [0,'D',0.5,'0円＋改善計画'],
+];
+const COMP_ITEMS = [
+  {name:'報連相', desc:'問題・遅れを聞かれる前に自分から報告している', s:'先回りして共有し代替案も提示', b:'聞かれる前に報連相できている', d:'催促されるまで報告しない'},
+  {name:'顧客・人材対応', desc:'企業/人材への返信24時間以内・丁寧なフォロー', s:'期待を超える提案で感謝・指名', b:'24時間以内返信を維持', d:'返信遅延が常態化・苦情'},
+  {name:'正確性・期限', desc:'手続き・書類を期限内にミスなく完了している', s:'ミスゼロ＋前倒し＋チェック仕組み化', b:'期限内・重大ミスなし', d:'期限遅れ・同じミスの繰り返し'},
+  {name:'優先順位・スピード', desc:'タスクに優先順位をつけ滞留させていない', s:'チーム全体の優先順位づけを主導', b:'自分のタスクを適切に優先順位づけ', d:'重要タスクの滞留・抜け漏れ'},
+  {name:'改善・工夫', desc:'業務のやり方を改善した具体例がある', s:'改善を仕組み化しチームに定着', b:'自業務の改善例が複数', d:'言われたやり方のみ'},
+  {name:'チーム貢献', desc:'忙しい同僚・他チームを実際に手伝った事実がある', s:'仕組みでチーム成果を引き上げた', b:'忙しい同僚を実際に手伝った', d:'自分の業務のみ'},
+  {name:'挑戦・成長', desc:'新しい業務に自ら手を挙げた・学習している', s:'難案件に立候補してやり遂げた', b:'新業務・学習に取り組む', d:'現状維持のみ'},
+  {name:'指導・ナレッジ共有', desc:'後輩指導や手順の文書化・共有をしている', s:'後輩を独り立ちさせた・手順書整備', b:'質問に答えノウハウ共有', d:'知識を共有しない・属人化'},
+  {name:'（任意）日本語力向上', desc:'学習の継続・JLPT等の進捗（外国籍・本人希望時）', s:'JLPT等級アップ等の明確な成果', b:'学習継続・業務日本語が改善', d:'—'},
+  {name:'（任意）資格取得', desc:'業務関連資格の取得・受験（本人希望時）', s:'資格を取得', b:'受験・学習中', d:'—'},
+];
+const ATT_ITEMS = [
+  {name:'規律・勤怠', desc:'遅刻・無断欠勤ゼロ、社内ルール・整理整頓の遵守'},
+  {name:'誠実さ', desc:'ミスを隠さず自分から報告し、他人のせいにしない'},
+  {name:'協調性', desc:'人の意見を受け入れ本音で話し合える関係を作っている'},
+];
+const KPI_LIBRARY = [
+  {role:'紹介営業', name:'成約数（決定数）', def:'入社決定した人数（国籍チーム別）', bench:'GLT月報の3ヶ月ノルマと連動', weight:30},
+  {role:'紹介営業', name:'売上', def:'成約による手数料売上', bench:'成約単価×成約数から逆算', weight:20},
+  {role:'紹介営業', name:'推薦数/面談数', def:'企業への推薦人数・人材面談実施数', bench:'売上目標÷成約単価÷自社通過率から逆算', weight:20},
+  {role:'紹介営業', name:'書類通過率(%)', def:'書類通過数÷推薦数', bench:'市場平均30〜40%・厳選推薦で80%目標', weight:15},
+  {role:'紹介営業', name:'定着（返金ゼロ）', def:'返金規定期間内の早期退職ゼロ', bench:'0件が基準', weight:15},
+  {role:'紹介営業', name:'新規求人開拓数', def:'新規に獲得した求人・企業数', bench:'自社実績から設定', weight:10},
+  {role:'支援担当', name:'定期面談実施率(%)', def:'四半期ごとの面談実施÷対象者数', bench:'法定義務＝100%が最低ライン', weight:25},
+  {role:'支援担当', name:'届出期限遵守率(%)', def:'定期・随時届出の期限内提出率', bench:'100%（定期届出は年1回・4/1〜5/31）', weight:25},
+  {role:'支援担当', name:'定着率(%)', def:'期首在籍＋新規のうち期末在籍の割合', bench:'全国の自発的離職率16.1%未満で平均以上', weight:20},
+  {role:'支援担当', name:'苦情・相談 初動(%)', def:'24時間以内の一次対応率', bench:'100%記録', weight:15},
+  {role:'支援担当', name:'支援対象者数', def:'1人あたり担当支援人数', bench:'過負荷は面談・届出漏れの原因', weight:15},
+  {role:'支援担当', name:'行方不明者数', def:'担当からの失踪者数', bench:'0（絶対条件）', weight:10},
+  {role:'マーケティング', name:'応募数（CV）', def:'SNS・広告経由の応募数', bench:'広告月報のCV列を毎月集計', weight:30},
+  {role:'マーケティング', name:'応募→面談率(%)', def:'面談設定数÷応募数', bench:'低いなら訴求と求人のミスマッチ', weight:30},
+  {role:'マーケティング', name:'CPA(円)', def:'広告費÷応募数', bench:'COST÷CV。自社基準値を作る', weight:20},
+  {role:'マーケティング', name:'フォロワー純増', def:'FB/IG/TikTokの純増数', bench:'SNS月報と連動（国籍別）', weight:20},
+  {role:'バックオフィス', name:'手続き期限遵守率(%)', def:'社保・入管・税の期限内処理率', bench:'100%', weight:40},
+  {role:'バックオフィス', name:'処理ミス率（件）', def:'差戻し・再提出の件数', bench:'件数管理でゼロへ', weight:30},
+  {role:'バックオフィス', name:'改善提案（件）', def:'業務改善・仕組み化の実行数', bench:'半期2件以上など', weight:30},
+];
+
 /* ---------------- state ---------------- */
 let data = {departments:[], employees:[], evaluations:[], kpis:[], assets:[], docTemplates:[], allowedUsers:[]};
 let session = null;
@@ -226,8 +282,14 @@ function empToDb(e){ return {
   zairyu_status:e.zairyuStatus||'', zairyu_card_no:e.zairyuCardNo||'', zairyu_expiry:dOrNull(e.zairyuExpiry),
   passport_no:e.passportNo||'', passport_expiry:dOrNull(e.passportExpiry), toritsugi_expiry:dOrNull(e.toritsugiExpiry), notes:e.notes||''
 };}
-function dbToEval(r){ return {id:r.id, empId:r.employee_id, period:r.period, evaluator:r.evaluator, status:r.status, goals:r.goals||[], selfScore:r.self_score, mgrScore:r.mgr_score, finalGrade:r.final_grade, comment:r.comment}; }
-function evalToDb(v){ return {id:v.id, employee_id:v.empId, period:v.period||'', evaluator:v.evaluator||'', status:v.status, goals:v.goals||[], self_score:v.selfScore||'', mgr_score:v.mgrScore||'', final_grade:v.finalGrade||'', comment:v.comment||''}; }
+function dbToEval(r){ return {id:r.id, empId:r.employee_id, period:r.period, evaluator:r.evaluator, status:r.status,
+  role:r.role||'紹介営業', kpis:r.kpis||[], comps:r.comps||[], atts:r.atts||[],
+  sdReason:r.sd_reason||'', midReview:r.mid_review||'', finalMeeting:r.final_meeting||'', empComment:r.emp_comment||'',
+  goals:r.goals||[], selfScore:r.self_score, mgrScore:r.mgr_score, finalGrade:r.final_grade, comment:r.comment}; }
+function evalToDb(v){ return {id:v.id, employee_id:v.empId, period:v.period||'', evaluator:v.evaluator||'', status:v.status,
+  role:v.role||'紹介営業', kpis:v.kpis||[], comps:v.comps||[], atts:v.atts||[],
+  sd_reason:v.sdReason||'', mid_review:v.midReview||'', final_meeting:v.finalMeeting||'', emp_comment:v.empComment||'',
+  goals:v.goals||[], self_score:v.selfScore||'', mgr_score:v.mgrScore||'', final_grade:v.finalGrade||'', comment:v.comment||''}; }
 function dbToKpi(r){ return {id:r.id, period:r.period, scope:r.scope, empId:r.employee_id||'', dept:r.dept, name:r.name, unit:r.unit, target:r.target, records:r.records||[], notes:r.notes}; }
 function kpiToDb(k){ return {id:k.id, period:k.period||'', scope:k.scope, employee_id:dOrNull(k.empId), dept:k.dept||'', name:k.name, unit:k.unit||'', target:k.target||'', records:k.records||[], notes:k.notes||''}; }
 function dbToAsset(r){ return {id:r.id, assetNo:r.asset_no, category:r.category, name:r.name, serial:r.serial, purchaseDate:r.purchase_date||'', price:r.price, status:r.status, assignedTo:r.assigned_to||'', lendDate:r.lend_date||'', returnDate:r.return_date||'', notes:r.notes}; }
@@ -792,7 +854,42 @@ function tagLabel(tags){
   return tags.map(t=>m[t]||t).join('・');
 }
 
-/* ---------------- evaluations ---------------- */
+/* ---------------- evaluations（評価シート2026新版） ---------------- */
+function evalKpiCalc(k){
+  const t = parseFloat(k.target), f = parseFloat(k.final);
+  const adj = (k.adjusted!==''&&k.adjusted!=null)? parseFloat(k.adjusted) : NaN;
+  if(!t || isNaN(f)) return {rate:null, auto:null, score: isNaN(adj)? null : adj};
+  const rate = f/t;
+  const auto = rate>=1.2?5 : rate>=1?4 : rate>=0.8?3 : rate>=0.6?2 : 1;
+  return {rate, auto, score: isNaN(adj)? auto : adj};
+}
+function evalCalc(v){
+  const wts = EVAL_ROLES[v.role] || EVAL_ROLES['紹介営業'];
+  let wsum=0, ssum=0;
+  (v.kpis||[]).forEach(k=>{
+    const w = parseFloat(k.weight); const c = evalKpiCalc(k);
+    if(w && c.score!=null){ wsum+=w; ssum+=w*c.score; }
+  });
+  const aSub = wsum? Math.round(ssum/wsum*100)/100 : null;
+  const avg = arr => { const xs=arr.map(x=>parseFloat(x.mgr)).filter(x=>!isNaN(x)); return xs.length? Math.round(xs.reduce((s,x)=>s+x,0)/xs.length*100)/100 : null; };
+  const bSub = avg(v.comps||[]);
+  const cSub = avg(v.atts||[]);
+  let total=null, rank='', coef='', band='';
+  if(aSub!=null && bSub!=null && cSub!=null){
+    total = Math.round((aSub*wts.a/100 + bSub*wts.b/100 + cSub*wts.c/100)*100)/100;
+    for(const r of RANK_TABLE){ if(total>=r[0]){ rank=r[1]; coef=r[2]; band=r[3]; break; } }
+  }
+  return {wts, aSub, bSub, cSub, total, rank, coef, band};
+}
+function newEvalObj(empId, period){
+  const e = empId? empById(empId) : null;
+  const role = e? (DEPT_ROLE[e.department]||'支援担当') : '紹介営業';
+  return {id:uid(), empId:empId||'', period:period||'', evaluator:'', status:'目標設定', role,
+    kpis:[], comps:COMP_ITEMS.map(c=>({key:c.name, self:'', team:'', mgr:'', episode:''})),
+    atts:ATT_ITEMS.map(c=>({key:c.name, self:'', team:'', mgr:'', episode:''})),
+    sdReason:'', midReview:'', finalMeeting:'', empComment:'',
+    goals:[], selfScore:'', mgrScore:'', finalGrade:'', comment:''};
+}
 function viewEvals(){
   const periods = [...new Set(data.evaluations.map(v=>v.period))].sort().reverse();
   let list = data.evaluations.slice();
@@ -800,7 +897,7 @@ function viewEvals(){
   list.sort((a,b)=>(b.period||'').localeCompare(a.period||''));
   return `
   <div class="panel">
-    <h2>評価管理 <span class="en">Performance review（MBO：目標設定 → 自己評価 → 上長評価 → 確定）</span></h2>
+    <h2>評価管理 <span class="en">評価シート2026新版：A成果KPI × Bコンピテンシー × C情意 → 総合ランク自動計算</span></h2>
     <div class="toolbar">
       <select onchange="evalPeriodFilter=this.value;render()">
         <option value="">全期間</option>
@@ -811,92 +908,190 @@ function viewEvals(){
       <button class="btn" onclick="openEvalForm()">＋ 評価シート作成</button>
     </div>
     <div class="tablewrap"><table>
-      <tr><th>期間</th><th>対象者</th><th>評価者</th><th>目標数</th><th>自己評価</th><th>上長評価</th><th>最終評価</th><th>進捗</th></tr>
-      ${list.map(v=>`
+      <tr><th>期間</th><th>対象者</th><th>役割区分</th><th>評価者</th><th>A成果</th><th>B行動</th><th>C情意</th><th>総合点</th><th>ランク</th><th>進捗</th></tr>
+      ${list.map(v=>{
+        const c = evalCalc(v);
+        return `
         <tr class="clickable" onclick="openEvalForm('${v.id}')">
           <td>${esc(v.period)}</td>
           <td><b>${esc(empName(v.empId))}</b></td>
+          <td>${esc(v.role||'')}</td>
           <td>${esc(v.evaluator||'')}</td>
-          <td>${(v.goals||[]).length}</td>
-          <td>${v.selfScore?esc(v.selfScore):'—'}</td>
-          <td>${v.mgrScore?esc(v.mgrScore):'—'}</td>
-          <td>${v.finalGrade?`<span class="badge ${v.finalGrade==='S'||v.finalGrade==='A'?'b-green':v.finalGrade==='B'?'b-blue':'b-yellow'}">${esc(v.finalGrade)}</span>`:'—'}</td>
+          <td>${c.aSub!=null?c.aSub:'—'}</td>
+          <td>${c.bSub!=null?c.bSub:'—'}</td>
+          <td>${c.cSub!=null?c.cSub:'—'}</td>
+          <td>${c.total!=null?`<b>${c.total}</b>`:'—'}</td>
+          <td>${c.rank?`<span class="badge ${c.rank==='S'||c.rank==='A'?'b-green':c.rank==='B'?'b-blue':'b-yellow'}">${c.rank}</span>`:'—'}</td>
           <td><span class="badge ${v.status==='確定'?'b-green':v.status==='目標設定'?'b-gray':'b-yellow'}">${esc(v.status)}</span></td>
-        </tr>`).join('')||'<tr><td colspan="8" class="muted">評価シートがありません。「＋評価シート作成」または「在籍者に一括作成」から始めてください。</td></tr>'}
+        </tr>`;
+      }).join('')||'<tr><td colspan="10" class="muted">評価シートがありません。「＋評価シート作成」または「在籍者に一括作成」から始めてください。</td></tr>'}
     </table></div>
+    <p class="muted" style="margin-top:8px">ウェイト：${Object.entries(EVAL_ROLES).map(([k,w])=>`${k} ${w.a}/${w.b}/${w.c}`).join('　')}／ランク：S≥4.5 A≥3.7 B≥2.8 C≥2.0</p>
   </div>`;
 }
 async function bulkCreateEvals(){
-  const period = prompt('評価期間を入力してください（例：2026上期）');
+  const period = prompt('評価期間を入力してください（例：2026下期）');
   if(!period) return;
   const created = [];
   data.employees.filter(e=>e.status==='在籍').forEach(e=>{
     if(!data.evaluations.some(v=>v.empId===e.id && v.period===period)){
-      created.push({id:uid(), empId:e.id, period, evaluator:'', status:'目標設定', goals:[], selfScore:'', mgrScore:'', finalGrade:'', comment:''});
+      created.push(newEvalObj(e.id, period));
     }
   });
   if(!created.length){ alert('作成対象がありません。'); return; }
   await q(sb.from('evaluations').insert(created.map(evalToDb)));
   data.evaluations.push(...created);
-  render(); toast(created.length+'名分の評価シートを作成しました');
+  render(); toast(created.length+'名分の評価シートを作成しました（役割区分は部署から自動設定・各シートで変更可）');
 }
 function openEvalForm(id){
-  const v = id? data.evaluations.find(x=>x.id===id) : {id:uid(), empId:'', period:'', evaluator:'', status:'目標設定', goals:[], selfScore:'', mgrScore:'', finalGrade:'', comment:''};
+  let v = id? data.evaluations.find(x=>x.id===id) : newEvalObj('', '');
   const isNew = !id;
-  window._evalDraft = JSON.parse(JSON.stringify(v));
+  v = JSON.parse(JSON.stringify(v));
+  // 旧形式・項目追加への追従：comps/atts が未整備なら初期化
+  if(!v.role) v.role='紹介営業';
+  if(!v.comps || !v.comps.length) v.comps = COMP_ITEMS.map(c=>({key:c.name, self:'', team:'', mgr:'', episode:''}));
+  if(!v.atts || !v.atts.length) v.atts = ATT_ITEMS.map(c=>({key:c.name, self:'', team:'', mgr:'', episode:''}));
+  window._evalDraft = v;
   renderEvalModal(isNew);
+}
+function scoreSel(val, oc){
+  return `<select style="width:100%" onchange="${oc}">${['',1,2,3,4,5].map(s=>`<option value="${s}" ${String(val)===String(s)?'selected':''}>${s===''?'—':s}</option>`).join('')}</select>`;
+}
+function evRecalc(){
+  const c = evalCalc(window._evalDraft);
+  const el = document.getElementById('evSummary');
+  if(el) el.innerHTML = evSummaryHtml(c);
+  (window._evalDraft.kpis||[]).forEach((k,i)=>{
+    const kc = evalKpiCalc(k);
+    const rc = document.getElementById('ev_rate_'+i); if(rc) rc.textContent = kc.rate!=null? Math.round(kc.rate*100)+'%' : '—';
+    const ac = document.getElementById('ev_auto_'+i); if(ac) ac.textContent = kc.auto!=null? kc.auto : '—';
+  });
+  const ws = document.getElementById('evWsum');
+  if(ws){ const sum = (window._evalDraft.kpis||[]).reduce((s,k)=>s+(parseFloat(k.weight)||0),0); ws.textContent = sum? `ウェイト合計: ${sum}%${sum===100?'':'（100にしてください）'}` : ''; }
+}
+function evSummaryHtml(c){
+  return `
+  <div class="grid cols4" style="margin:0">
+    <div class="stat"><div class="num">${c.aSub!=null?c.aSub:'—'}</div><div class="lbl">A小計（×${c.wts.a}%）</div></div>
+    <div class="stat"><div class="num">${c.bSub!=null?c.bSub:'—'}</div><div class="lbl">B小計（×${c.wts.b}%）</div></div>
+    <div class="stat"><div class="num">${c.cSub!=null?c.cSub:'—'}</div><div class="lbl">C小計（×${c.wts.c}%）</div></div>
+    <div class="stat" style="background:var(--ok-soft)"><div class="num">${c.total!=null? c.total+'　'+c.rank : '—'}</div><div class="lbl">総合点・ランク${c.rank?`／賞与係数 ${c.coef}・昇給 ${esc(c.band)}`:''}</div></div>
+  </div>
+  ${c.total==null?'<p class="muted" style="margin-top:6px">※総合点はA・B・Cすべてに上司評点が入ると自動計算されます</p>':''}`;
 }
 function renderEvalModal(isNew){
   const v = window._evalDraft;
+  const c = evalCalc(v);
+  const compOf = key => COMP_ITEMS.find(x=>x.name===key) || {desc:'',s:'',b:'',d:''};
+  const attOf = key => ATT_ITEMS.find(x=>x.name===key) || {desc:''};
   modal(`
-  <h3>${isNew?'評価シート作成':'評価シート編集'}</h3>
+  <h3>${isNew?'評価シート作成':'評価シート編集'} <span class="muted">評価シート2026新版</span></h3>
   <div class="formgrid">
     <div><label>対象者</label><select id="ev_emp">${data.employees.map(e=>`<option value="${e.id}" ${v.empId===e.id?'selected':''}>${esc(e.nameKanji||e.nameRoma)}</option>`).join('')}</select></div>
-    <div><label>評価期間（例：2026上期）</label><input id="ev_period" value="${esc(v.period)}"></div>
+    <div><label>評価期間（例：2026下期）</label><input id="ev_period" value="${esc(v.period)}"></div>
+    <div><label>役割区分（ウェイト自動適用）</label><select id="ev_role" onchange="_evalDraft.role=this.value;renderEvalModal(${isNew})">${Object.keys(EVAL_ROLES).map(r=>`<option ${v.role===r?'selected':''}>${r}</option>`).join('')}</select></div>
     <div><label>評価者</label><input id="ev_evaluator" value="${esc(v.evaluator)}"></div>
-    <div><label>進捗ステータス</label><select id="ev_status">${['目標設定','自己評価中','上長評価中','面談待ち','確定'].map(s=>`<option ${v.status===s?'selected':''}>${s}</option>`).join('')}</select></div>
+    <div><label>進捗ステータス</label><select id="ev_status">${EVAL_STATUSES.map(s=>`<option ${v.status===s?'selected':''}>${s}</option>`).join('')}</select></div>
   </div>
-  <div class="fieldset"><legend>目標（MBO）— 各目標に自己/上長スコア（1〜5）</legend>
+
+  <div class="fieldset"><legend>【A】成果・KPI評価（ウェイト${c.wts.a}%）— 達成率→評点は自動、調整列で上書き可</legend>
     <div class="tablewrap"><table>
-      <tr><th>目標</th><th style="width:70px">ｳｪｲﾄ%</th><th style="width:60px">自己</th><th style="width:60px">上長</th><th></th></tr>
-      ${v.goals.map((gl,i)=>`
-        <tr>
-          <td><input value="${esc(gl.goal)}" style="width:100%" onchange="_evalDraft.goals[${i}].goal=this.value"></td>
-          <td><input type="number" value="${esc(gl.weight)}" style="width:100%" onchange="_evalDraft.goals[${i}].weight=this.value"></td>
-          <td><input type="number" min="1" max="5" value="${esc(gl.self)}" style="width:100%" onchange="_evalDraft.goals[${i}].self=this.value"></td>
-          <td><input type="number" min="1" max="5" value="${esc(gl.mgr)}" style="width:100%" onchange="_evalDraft.goals[${i}].mgr=this.value"></td>
-          <td><button class="btn small ghost" onclick="_evalDraft.goals.splice(${i},1);renderEvalModal(${isNew})">✕</button></td>
-        </tr>`).join('')}
+      <tr><th>KPI項目</th><th style="width:62px">ｳｪｲﾄ%</th><th style="width:76px">目標値</th><th style="width:76px">中間</th><th style="width:76px">期末</th><th style="width:56px">達成率</th><th style="width:46px">自動</th><th style="width:64px">調整</th><th>コメント</th><th></th></tr>
+      ${(v.kpis||[]).map((k,i)=>{
+        const kc = evalKpiCalc(k);
+        return `<tr>
+          <td><input value="${esc(k.name)}" title="${esc(k.def||'')}" style="width:100%" onchange="_evalDraft.kpis[${i}].name=this.value"></td>
+          <td><input type="number" value="${esc(k.weight)}" style="width:100%" onchange="_evalDraft.kpis[${i}].weight=this.value;evRecalc()"></td>
+          <td><input type="number" value="${esc(k.target)}" style="width:100%" onchange="_evalDraft.kpis[${i}].target=this.value;evRecalc()"></td>
+          <td><input type="number" value="${esc(k.mid)}" style="width:100%" onchange="_evalDraft.kpis[${i}].mid=this.value"></td>
+          <td><input type="number" value="${esc(k.final)}" style="width:100%" onchange="_evalDraft.kpis[${i}].final=this.value;evRecalc()"></td>
+          <td class="center" id="ev_rate_${i}">${kc.rate!=null? Math.round(kc.rate*100)+'%':'—'}</td>
+          <td class="center" id="ev_auto_${i}">${kc.auto!=null? kc.auto:'—'}</td>
+          <td>${scoreSel(k.adjusted, `_evalDraft.kpis[${i}].adjusted=this.value;evRecalc()`)}</td>
+          <td><input value="${esc(k.comment||'')}" style="width:100%" onchange="_evalDraft.kpis[${i}].comment=this.value"></td>
+          <td><button class="btn small ghost" onclick="_evalDraft.kpis.splice(${i},1);renderEvalModal(${isNew})">✕</button></td>
+        </tr>`;
+      }).join('')||'<tr><td colspan="10" class="muted">KPIがまだありません。下のライブラリから追加してください（3〜5個・ウェイト合計100）。</td></tr>'}
     </table></div>
-    <button class="btn small secondary" style="margin-top:8px" onclick="_evalDraft.goals.push({goal:'',weight:'',self:'',mgr:''});renderEvalModal(${isNew})">＋ 目標を追加</button>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
+      <select id="ev_lib">${Object.keys(EVAL_ROLES).map(r=>`<optgroup label="${r}">${KPI_LIBRARY.filter(k=>k.role===r).map((k)=>`<option value="${esc(k.name)}" ${r===v.role?'':''}>${esc(k.name)}（目安:${esc(k.bench)}）</option>`).join('')}</optgroup>`).join('')}</select>
+      <button class="btn small secondary" onclick="(function(){const n=document.getElementById('ev_lib').value;const l=KPI_LIBRARY.find(x=>x.name===n);_evalDraft.kpis.push({name:l.name,def:l.def+'／'+l.bench,weight:l.weight,target:'',mid:'',final:'',adjusted:'',comment:''});renderEvalModal(${isNew});})()">📚 ライブラリから追加</button>
+      <button class="btn small ghost" onclick="_evalDraft.kpis.push({name:'',def:'',weight:'',target:'',mid:'',final:'',adjusted:'',comment:''});renderEvalModal(${isNew})">＋ 空行を追加</button>
+      <span class="muted" id="evWsum"></span>
+    </div>
   </div>
+
+  <div class="fieldset"><legend>【B】コンピテンシー評価（ウェイト${c.wts.b}%）— 行動基準はマウスオーバーで表示。下2行は外国籍社員の任意項目</legend>
+    <div class="tablewrap"><table>
+      <tr><th>項目</th><th style="width:64px">自己</th><th style="width:64px">チーム</th><th style="width:64px">上司★</th><th>エピソード・事実</th></tr>
+      ${(v.comps||[]).map((x,i)=>{
+        const m = compOf(x.key);
+        return `<tr>
+          <td title="S: ${esc(m.s)}／B: ${esc(m.b)}／D: ${esc(m.d)}">${esc(x.key)}<br><span class="muted">${esc(m.desc)}</span></td>
+          <td>${scoreSel(x.self, `_evalDraft.comps[${i}].self=this.value`)}</td>
+          <td>${scoreSel(x.team, `_evalDraft.comps[${i}].team=this.value`)}</td>
+          <td>${scoreSel(x.mgr, `_evalDraft.comps[${i}].mgr=this.value;evRecalc()`)}</td>
+          <td><input value="${esc(x.episode||'')}" style="width:100%" onchange="_evalDraft.comps[${i}].episode=this.value"></td>
+        </tr>`;
+      }).join('')}
+    </table></div>
+    <p class="muted" style="margin-top:4px">★集計に使うのは上司評点。任意項目は未使用なら「—」のままでOK（平均から除外されます）。</p>
+  </div>
+
+  <div class="fieldset"><legend>【C】情意評価（ウェイト${c.wts.c}%）— 事実ベースで</legend>
+    <div class="tablewrap"><table>
+      <tr><th>項目</th><th style="width:64px">自己</th><th style="width:64px">チーム</th><th style="width:64px">上司★</th><th>エピソード・事実</th></tr>
+      ${(v.atts||[]).map((x,i)=>{
+        const m = attOf(x.key);
+        return `<tr>
+          <td>${esc(x.key)}<br><span class="muted">${esc(m.desc)}</span></td>
+          <td>${scoreSel(x.self, `_evalDraft.atts[${i}].self=this.value`)}</td>
+          <td>${scoreSel(x.team, `_evalDraft.atts[${i}].team=this.value`)}</td>
+          <td>${scoreSel(x.mgr, `_evalDraft.atts[${i}].mgr=this.value;evRecalc()`)}</td>
+          <td><input value="${esc(x.episode||'')}" style="width:100%" onchange="_evalDraft.atts[${i}].episode=this.value"></td>
+        </tr>`;
+      }).join('')}
+    </table></div>
+  </div>
+
+  <div class="fieldset"><legend>【総合評価】自動計算</legend>
+    <div id="evSummary">${evSummaryHtml(c)}</div>
+  </div>
+
   <div class="formgrid" style="margin-top:12px">
-    <div><label>自己評価（総合・任意）</label><input id="ev_self" value="${esc(v.selfScore)}"></div>
-    <div><label>上長評価（総合・任意）</label><input id="ev_mgr" value="${esc(v.mgrScore)}"></div>
-    <div><label>最終評価（S〜D）</label><select id="ev_grade"><option value="">—</option>${GRADES.map(s=>`<option ${v.finalGrade===s?'selected':''}>${s}</option>`).join('')}</select></div>
+    <div style="grid-column:1/-1"><label>S・D評価の理由（該当時は必須）</label><textarea id="ev_sd" rows="2" style="width:100%">${esc(v.sdReason)}</textarea></div>
+    <div style="grid-column:1/-1"><label>中間レビュー記録（日付・内容）</label><textarea id="ev_mid" rows="2" style="width:100%">${esc(v.midReview)}</textarea></div>
+    <div style="grid-column:1/-1"><label>期末フィードバック面談記録（日付・内容）</label><textarea id="ev_fin" rows="2" style="width:100%">${esc(v.finalMeeting)}</textarea></div>
+    <div style="grid-column:1/-1"><label>本人コメント（評価への意見・来期に向けて）</label><textarea id="ev_emp_c" rows="2" style="width:100%">${esc(v.empComment)}</textarea></div>
   </div>
-  <div class="field" style="margin-top:10px"><label>面談コメント・フィードバック</label><textarea id="ev_comment" rows="3" style="width:100%">${esc(v.comment)}</textarea></div>
   <div class="modal-actions">
     ${isNew?'':`<button class="btn danger" onclick="deleteEval('${v.id}')" style="margin-right:auto">削除</button>`}
     <button class="btn ghost" onclick="closeModal()">キャンセル</button>
     <button class="btn" onclick="saveEval(${isNew})">保存</button>
   </div>`);
+  evRecalc();
 }
 async function saveEval(isNew){
   const v = window._evalDraft;
   v.empId = document.getElementById('ev_emp').value;
   v.period = document.getElementById('ev_period').value.trim();
+  v.role = document.getElementById('ev_role').value;
   v.evaluator = document.getElementById('ev_evaluator').value.trim();
   v.status = document.getElementById('ev_status').value;
-  v.selfScore = document.getElementById('ev_self').value.trim();
-  v.mgrScore = document.getElementById('ev_mgr').value.trim();
-  v.finalGrade = document.getElementById('ev_grade').value;
-  v.comment = document.getElementById('ev_comment').value;
+  v.sdReason = document.getElementById('ev_sd').value;
+  v.midReview = document.getElementById('ev_mid').value;
+  v.finalMeeting = document.getElementById('ev_fin').value;
+  v.empComment = document.getElementById('ev_emp_c').value;
   if(!v.empId || !v.period){ alert('対象者と評価期間を入力してください'); return; }
+  const wsum = (v.kpis||[]).reduce((s,k)=>s+(parseFloat(k.weight)||0),0);
+  if(wsum && wsum!==100 && !confirm(`KPIのウェイト合計が${wsum}%です（推奨100%）。このまま保存しますか？`)) return;
+  const c = evalCalc(v);
+  if((c.rank==='S'||c.rank==='D') && !v.sdReason.trim() && !confirm(`ランク${c.rank}には理由の記載が必須です。理由なしで保存しますか？`)) return;
+  v.finalGrade = c.rank || '';
   await q(sb.from('evaluations').upsert(evalToDb(v)));
   if(isNew) data.evaluations.push(v);
   else{ const i = data.evaluations.findIndex(x=>x.id===v.id); if(i>=0) data.evaluations[i]=v; }
-  toast('保存しました');
+  toast('保存しました' + (c.rank? `（総合${c.total}・ランク${c.rank}）`:''));
   closeModal(); render();
 }
 async function deleteEval(id){
