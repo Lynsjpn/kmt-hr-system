@@ -434,7 +434,14 @@ async function signup(){
   const pass = document.getElementById('lg_pass').value;
   if(!email||!pass){ document.getElementById('lg_msg').textContent='メールとパスワード（6文字以上）を入力してください'; return; }
   const {error} = await sb.auth.signUp({email, password:pass});
-  if(error){ document.getElementById('lg_msg').textContent = '登録失敗：'+error.message; return; }
+  if(error){
+    // 許可リスト（allowed_users）に無いメールはDB側で新規登録を拒否している
+    const msg = /signup_not_allowed/.test(error.message)
+      ? '登録失敗：このメールアドレスは利用を許可されていません。管理者に「データ管理 > 利用ユーザー」への追加を依頼してください。'
+      : '登録失敗：'+error.message;
+    document.getElementById('lg_msg').textContent = msg;
+    return;
+  }
   showLogin('確認メールを送信しました。メール内のリンクをクリックしてから、ここでログインしてください。', true);
 }
 async function logout(){
