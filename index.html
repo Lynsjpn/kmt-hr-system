@@ -114,8 +114,8 @@ footer{text-align:center;color:var(--sub);font-size:11px;padding:16px}
 /* ============================================================
    KMT HR Management System — cloud edition (Supabase backend)
    ============================================================ */
-const SUPABASE_URL = 'https://ndvdjzieztqbekacevxk.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_mD9o4ZovQ1un9KgyamlafA_EIgHlylK';
+const SUPABASE_URL = 'https://brktkgkbmcqubeuhehpv.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_wv0PLH_4hHIt_lCnA6_ZHA_D_jpF1Zd';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const DEFAULT_DOC_TEMPLATES = [
@@ -169,6 +169,18 @@ const ZAIRYU_LIST = ['技術・人文知識・国際業務','特定技能1号','
 const ASSET_CATS = ['PC','モニター','スマートフォン','SIM/回線','ソフトウェアライセンス','クレジットカード','交通・燃料カード','鍵・カード','事務機器','その他'];
 const ASSET_STATUSES = ['在庫','貸与中','使用中','修理中','紛失','廃棄'];
 const GRADES = ['S','A','B','C','D'];
+
+/* ===== 権限レベル ===== */
+const ROLES = ['ゲスト','社員','管理者','全体管理'];
+const ROLE_RANK = {'ゲスト':0,'社員':1,'管理者':2,'全体管理':3};
+const ROLE_DESC = {
+  'ゲスト':'手続きガイドのみ閲覧できます。従業員の個人情報は一切表示されません。',
+  '社員':'自分自身の人事情報・書類・評価のみ閲覧できます（編集不可）。',
+  '管理者':'全従業員の情報を閲覧・編集できます。ユーザー管理とデータ削除はできません。',
+  '全体管理':'すべての操作＋利用ユーザーの追加・権限変更ができます。',
+};
+/* 書き込みに必要な最低ランク（テーブル別） */
+const WRITE_RANK = {allowed_users:3, departments:2, doc_templates:2, employees:2, employee_docs:2, evaluations:2, kpis:2, assets:2};
 
 /* ===== 評価シート2026新版 マスタ ===== */
 const EVAL_ROLES = {
@@ -246,6 +258,26 @@ function daysUntil(dateStr){
 function empById(id){ return data.employees.find(e=>e.id===id); }
 function empName(id){ const e=empById(id); return e? e.nameKanji||e.nameRoma : '—'; }
 
+/* ---------------- 権限 ---------------- */
+function myEmail(){ return (session && session.user ? session.user.email : '').toLowerCase(); }
+function myUser(){ const em=myEmail(); return data.allowedUsers.find(u=>(u.email||'').toLowerCase()===em) || null; }
+function myRole(){ const u=myUser(); return u ? (u.role||'社員') : 'ゲスト'; }
+function myRank(){ return ROLE_RANK[myRole()] != null ? ROLE_RANK[myRole()] : 0; }
+function canEdit(){ return myRank()>=2; }   // 管理者以上：全社データの編集
+function canAdmin(){ return myRank()>=3; }  // 全体管理：ユーザー管理・データ削除
+/* 自分自身の従業員レコード（メールで紐付け） */
+function myEmpId(){ const em=myEmail(); const e=data.employees.find(x=>(x.email||'').toLowerCase()===em && em); return e? e.id : null; }
+/* 閲覧できる従業員に絞り込む（管理者以上は全員、社員は自分のみ、ゲストは無し） */
+function scopeEmps(list){
+  const r = myRank();
+  if(r>=2) return list;
+  if(r<=0) return [];
+  const id = myEmpId();
+  return list.filter(e=>e.id===id);
+}
+function canSeeEmp(id){ return scopeEmps(data.employees).some(e=>e.id===id); }
+function denyMsg(){ return `この操作には管理者権限が必要です（現在の権限：${myRole()}）`; }
+
 let toastTimer = null;
 function toast(msg, isErr){
   const t = document.getElementById('toast');
@@ -259,6 +291,26 @@ async function q(promise){
   if(error){ toast('保存エラー: '+error.message, true); throw error; }
   return d;
 }
+/* 書き込みガード：権限の無いユーザーの insert/update/upsert/delete を画面側でも遮断する。
+   本来の防御は Supabase 側の RLS（サーバー側）。ここは二重の安全網。 */
+const _sbFrom = sb.from.bind(sb);
+sb.from = function(table){
+  const b = _sbFrom(table);
+  ['insert','update','upsert','delete'].forEach(m=>{
+    if(typeof b[m] !== 'function') return;
+    const orig = b[m].bind(b);
+    b[m] = function(){
+      const need = WRITE_RANK[table] != null ? WRITE_RANK[table] : 2;
+      if(myRank() < need){
+        const blocked = Promise.resolve({data:null, error:{message:denyMsg()}});
+        ['select','eq','neq','in','match','single','order','limit'].forEach(k=>{ blocked[k] = ()=>blocked; });
+        return blocked;
+      }
+      return orig.apply(b, arguments);
+    };
+  });
+  return b;
+};
 const dOrNull = s=>s||null;
 function dbToEmp(r){ return {
   id:r.id, empNo:r.emp_no, status:r.status, nameKanji:r.name_kanji, nameKana:r.name_kana, nameRoma:r.name_roma,
@@ -317,7 +369,12 @@ async function loadAll(){
   data.evaluations = evals.map(dbToEval);
   data.kpis = kpis.map(dbToKpi);
   data.assets = assets.map(dbToAsset);
-  data.allowedUsers = allowed.map(a=>a.email);
+  data.allowedUsers = allowed.map(a=>({
+    email: a.email,
+    name: a.display_name || '',
+    role: ROLES.includes(a.role) ? a.role : '社員',
+    addedAt: (a.added_at||'').slice(0,10),
+  }));
 }
 
 /* ---------------- doc logic ---------------- */
@@ -393,17 +450,34 @@ async function start(){
   document.getElementById('main').innerHTML = '<div class="login-wrap"><div class="muted">データ読み込み中…</div></div>';
   try{ await loadAll(); }
   catch(e){ showLogin('データ取得に失敗しました：'+e.message); return; }
-  if(!data.allowedUsers.length){
+  if(!data.allowedUsers.length || !myUser()){
     document.getElementById('nav').innerHTML='';
     document.getElementById('main').innerHTML = `
     <div class="login-wrap"><div class="login-card">
       <h2>アクセス権がありません</h2>
-      <p class="muted">このアカウント（${esc(session.user.email)}）は許可リストに登録されていません。管理者に「データ管理＞利用ユーザー」への追加を依頼してください。</p>
+      <p class="muted">このアカウント（${esc(session.user.email)}）は許可リストに登録されていません。全体管理者に「ユーザー管理」への追加を依頼してください。</p>
       <button class="btn" onclick="logout()">ログアウト</button>
     </div></div>`;
     return;
   }
+  await autoSeed();
+  if(!navAllowed(view)) view='dashboard';
   render();
+}
+/* 新しいDBで初回ログインしたとき、書類マスタと部署マスタを自動投入する */
+async function autoSeed(){
+  if(myRank()<2) return;
+  try{
+    if(!data.docTemplates.length){
+      await q(sb.from('doc_templates').insert(DEFAULT_DOC_TEMPLATES));
+      data.docTemplates = DEFAULT_DOC_TEMPLATES.map(t=>Object.assign({}, t));
+    }
+    if(!data.departments.length){
+      const defs = Object.keys(DEPT_ROLE);
+      await q(sb.from('departments').insert(defs.map((n,i)=>({name:n, sort_order:i+1}))));
+      data.departments = defs.slice();
+    }
+  }catch(e){ /* 初期化に失敗しても通常の利用は継続する */ }
 }
 function showLogin(msg, ok){
   document.getElementById('nav').innerHTML='';
@@ -437,7 +511,7 @@ async function signup(){
   if(error){
     // 許可リスト（allowed_users）に無いメールはDB側で新規登録を拒否している
     const msg = /signup_not_allowed/.test(error.message)
-      ? '登録失敗：このメールアドレスは利用を許可されていません。管理者に「データ管理 > 利用ユーザー」への追加を依頼してください。'
+      ? '登録失敗：このメールアドレスは利用を許可されていません。全体管理者に「ユーザー管理」への追加を依頼してください。'
       : '登録失敗：'+error.message;
     document.getElementById('lg_msg').textContent = msg;
     return;
@@ -456,24 +530,34 @@ async function reloadData(){
 }
 
 /* ================= RENDER ================= */
+/* [キー, 表示名, 必要な最低ランク] */
 const NAV = [
-  ['dashboard','ダッシュボード'],
-  ['employees','従業員・人事情報'],
-  ['docs','労務・書類管理'],
-  ['evals','評価管理'],
-  ['kpi','KPI管理'],
-  ['assets','資産管理'],
-  ['guide','手続きガイド'],
-  ['data','データ管理'],
+  ['dashboard','ダッシュボード',0],
+  ['employees','従業員・人事情報',1],
+  ['docs','労務・書類管理',1],
+  ['evals','評価管理',1],
+  ['kpi','KPI管理',1],
+  ['assets','資産管理',2],
+  ['guide','手続きガイド',0],
+  ['users','ユーザー管理',3],
+  ['data','データ管理',2],
 ];
+function navAllowed(key){
+  const it = NAV.find(n=>n[0]===key);
+  return !!it && myRank() >= it[2];
+}
 function renderNav(){
-  document.getElementById('nav').innerHTML = NAV.map(([k,l])=>
+  document.getElementById('nav').innerHTML = NAV.filter(n=>myRank()>=n[2]).map(([k,l])=>
     `<button class="${view===k?'active':''}" onclick="go('${k}')">${l}</button>`).join('')
     + `<button title="最新データを取得" onclick="reloadData()">↻</button>`
-    + `<span class="userchip">${esc(session?session.user.email:'')} <a href="javascript:logout()" style="color:#9fc3f0">ログアウト</a></span>`;
+    + `<span class="userchip">${esc(session?session.user.email:'')} <span class="badge b-blue" style="margin-left:6px">${esc(myRole())}</span> <a href="javascript:logout()" style="color:#9fc3f0">ログアウト</a></span>`;
 }
-function go(v){ view=v; if(v!=='employees') currentEmpId=null; render(); window.scrollTo(0,0); }
+function go(v){
+  if(!navAllowed(v)){ toast('このタブを表示する権限がありません', true); return; }
+  view=v; if(v!=='employees') currentEmpId=null; render(); window.scrollTo(0,0);
+}
 function render(){
+  if(!navAllowed(view)) view='dashboard';
   renderNav();
   const m = document.getElementById('main');
   if(view==='dashboard') m.innerHTML = viewDashboard();
@@ -483,18 +567,29 @@ function render(){
   else if(view==='kpi') m.innerHTML = viewKpi();
   else if(view==='assets') m.innerHTML = viewAssets();
   else if(view==='guide') m.innerHTML = viewGuide();
+  else if(view==='users') m.innerHTML = viewUsers();
   else if(view==='data') m.innerHTML = viewData();
 }
 
 /* ---------------- dashboard ---------------- */
 function viewDashboard(){
+  if(myRank()<=0){
+    return `
+    <div class="panel">
+      <h2>ようこそ <span class="en">Guest</span></h2>
+      <p class="muted">現在の権限は「ゲスト」です。個人情報を含むデータは表示されません。
+      「手続きガイド」タブで採用〜退職後の労務手続きチェックリストを閲覧できます。</p>
+      <p class="muted" style="margin-top:8px">権限の変更は全体管理者にご依頼ください（ログイン中：${esc(myEmail())}）。</p>
+    </div>`;
+  }
   const emps = data.employees;
   const active = emps.filter(e=>e.status==='在籍');
   const cnt = t=>active.filter(e=>e.employmentType===t).length;
   const foreign = active.filter(e=>e.isForeign).length;
   const natMap = {};
   active.forEach(e=>{ const n=e.nationality||'未設定'; natMap[n]=(natMap[n]||0)+1; });
-  const alerts = buildAlerts();
+  const scoped = scopeEmps(emps);
+  const alerts = buildAlerts().filter(a=>myRank()>=2 || scoped.some(e=>e.id===a.emp.id));
   const lent = data.assets.filter(a=>a.status==='貸与中').length;
   return `
   <div class="grid cols4">
@@ -526,7 +621,7 @@ function viewDashboard(){
     </div>
     <div class="panel">
       <h2>書類完了状況（内定・在籍者）</h2>
-      <table>${emps.filter(e=>e.status==='内定'||e.status==='在籍').map(e=>{const p=docProgress(e);return `<tr class="clickable" onclick="openEmp('${e.id}')"><td>${esc(e.nameKanji||e.nameRoma)}</td><td style="width:110px"><div class="progress"><div style="width:${p.pct}%"></div></div></td><td style="text-align:right">${p.done}/${p.total}</td></tr>`;}).join('')||'<tr><td class="muted">データなし</td></tr>'}</table>
+      <table>${scoped.filter(e=>e.status==='内定'||e.status==='在籍').map(e=>{const p=docProgress(e);return `<tr class="clickable" onclick="openEmp('${e.id}')"><td>${esc(e.nameKanji||e.nameRoma)}</td><td style="width:110px"><div class="progress"><div style="width:${p.pct}%"></div></div></td><td style="text-align:right">${p.done}/${p.total}</td></tr>`;}).join('')||'<tr><td class="muted">データなし</td></tr>'}</table>
     </div>
   </div>`;
 }
@@ -534,7 +629,7 @@ function viewDashboard(){
 /* ---------------- employees ---------------- */
 function viewEmployees(){
   const f = empFilter;
-  let list = data.employees.filter(e=>{
+  let list = scopeEmps(data.employees).filter(e=>{
     if(f.status && e.status!==f.status) return false;
     if(f.type && e.employmentType!==f.type) return false;
     if(f.dept && e.department!==f.dept) return false;
@@ -564,8 +659,8 @@ function viewEmployees(){
         ${data.departments.map(s=>`<option ${f.dept===s?'selected':''}>${esc(s)}</option>`).join('')}
       </select>
       <div class="spacer"></div>
-      <button class="btn secondary" onclick="exportEmpCsv()">CSV出力</button>
-      <button class="btn" onclick="openEmpForm()">＋ 従業員登録</button>
+      ${canEdit()? `<button class="btn secondary" onclick="exportEmpCsv()">CSV出力</button>
+      <button class="btn" onclick="openEmpForm()">＋ 従業員登録</button>` : '<span class="muted">閲覧のみの権限です</span>'}
     </div>
     <div class="tablewrap"><table>
       <tr><th>社員番号</th><th>氏名</th><th>ローマ字</th><th>国籍</th><th>雇用区分</th><th>部署</th><th>入社日</th><th>在留資格</th><th>在留期限</th><th>書類</th><th>状態</th></tr>
@@ -594,6 +689,7 @@ function openEmp(id){ view='employees'; currentEmpId=id; render(); window.scroll
 function viewEmpDetail(id){
   const e = empById(id);
   if(!e) { currentEmpId=null; return viewEmployees(); }
+  if(!canSeeEmp(id)){ currentEmpId=null; return `<div class="panel"><h2>閲覧権限がありません</h2><p class="muted">${esc(denyMsg())}</p></div>`; }
   const p = docProgress(e);
   const myAssets = data.assets.filter(a=>a.assignedTo===id && a.status==='貸与中');
   const myEvals = data.evaluations.filter(v=>v.empId===id).sort((a,b)=>(b.period||'').localeCompare(a.period||''));
@@ -617,7 +713,7 @@ function viewEmpDetail(id){
           ${Object.entries(PRINT_DOCS).map(([k,d])=>`<option value="${k}">${d.title}</option>`).join('')}
         </select>
         <button class="btn secondary" onclick="printDoc('${e.id}', document.getElementById('docSelect').value)">📄 書類作成</button>
-        <button class="btn" onclick="openEmpForm('${e.id}')">編集</button>
+        ${canEdit()? `<button class="btn" onclick="openEmpForm('${e.id}')">編集</button>`:''}
       </div>
     </div>
     <div class="grid cols3" style="margin-top:14px">
@@ -817,7 +913,7 @@ async function deleteEmp(id){
 
 /* ---------------- docs overview ---------------- */
 function viewDocs(){
-  const emps = data.employees.filter(e=>e.status!=='退職' || docProgress(e).pct<100);
+  const emps = scopeEmps(data.employees).filter(e=>e.status!=='退職' || docProgress(e).pct<100);
   return `
   <div class="panel">
     <h2>労務・書類管理 <span class="en">入社前 → 入社時 → 在職中 → 退職時 → 退職後</span></h2>
@@ -898,8 +994,9 @@ function newEvalObj(empId, period){
     goals:[], selfScore:'', mgrScore:'', finalGrade:'', comment:''};
 }
 function viewEvals(){
-  const periods = [...new Set(data.evaluations.map(v=>v.period))].sort().reverse();
-  let list = data.evaluations.slice();
+  const visible = myRank()>=2 ? data.evaluations : data.evaluations.filter(v=>canSeeEmp(v.empId));
+  const periods = [...new Set(visible.map(v=>v.period))].sort().reverse();
+  let list = visible.slice();
   if(evalPeriodFilter) list = list.filter(v=>v.period===evalPeriodFilter);
   list.sort((a,b)=>(b.period||'').localeCompare(a.period||''));
   return `
@@ -911,8 +1008,8 @@ function viewEvals(){
         ${periods.map(p=>`<option ${evalPeriodFilter===p?'selected':''}>${esc(p)}</option>`).join('')}
       </select>
       <div class="spacer"></div>
-      <button class="btn secondary" onclick="bulkCreateEvals()">在籍者に一括作成</button>
-      <button class="btn" onclick="openEvalForm()">＋ 評価シート作成</button>
+      ${canEdit()? `<button class="btn secondary" onclick="bulkCreateEvals()">在籍者に一括作成</button>
+      <button class="btn" onclick="openEvalForm()">＋ 評価シート作成</button>` : '<span class="muted">自分の評価のみ閲覧できます</span>'}
     </div>
     <div class="tablewrap"><table>
       <tr><th>期間</th><th>対象者</th><th>役割区分</th><th>評価者</th><th>A成果</th><th>B行動</th><th>C情意</th><th>総合点</th><th>ランク</th><th>進捗</th></tr>
@@ -1118,8 +1215,9 @@ function kpiRate(k){
 }
 function kpiActual(k){ return (k.records||[]).reduce((s,r)=>s+(parseFloat(r.actual)||0),0); }
 function viewKpi(){
-  const periods = [...new Set(data.kpis.map(k=>k.period))].sort().reverse();
-  let list = data.kpis.slice();
+  const visible = myRank()>=2 ? data.kpis : data.kpis.filter(k=>k.scope!=='個人' || canSeeEmp(k.empId));
+  const periods = [...new Set(visible.map(k=>k.period))].sort().reverse();
+  let list = visible.slice();
   if(kpiPeriodFilter) list = list.filter(k=>k.period===kpiPeriodFilter);
   return `
   <div class="panel">
@@ -1130,7 +1228,7 @@ function viewKpi(){
         ${periods.map(p=>`<option ${kpiPeriodFilter===p?'selected':''}>${esc(p)}</option>`).join('')}
       </select>
       <div class="spacer"></div>
-      <button class="btn" onclick="openKpiForm()">＋ KPI登録</button>
+      ${canEdit()? '<button class="btn" onclick="openKpiForm()">＋ KPI登録</button>' : '<span class="muted">閲覧のみの権限です</span>'}
     </div>
     <div class="tablewrap"><table>
       <tr><th>期間</th><th>区分</th><th>担当</th><th>KPI名</th><th>目標</th><th>実績累計</th><th>達成率</th></tr>
@@ -1287,6 +1385,85 @@ async function deleteAsset(id){
   closeModal(); render();
 }
 
+/* ---------------- user management ---------------- */
+function roleBadge(r){
+  const cls = r==='全体管理'?'b-red':r==='管理者'?'b-blue':r==='社員'?'b-green':'b-gray';
+  return `<span class="badge ${cls}">${esc(r)}</span>`;
+}
+function viewUsers(){
+  if(!canAdmin()) return `<div class="panel"><h2>権限がありません</h2><p class="muted">${esc(denyMsg())}</p></div>`;
+  const users = data.allowedUsers.slice().sort((a,b)=>(ROLE_RANK[b.role]-ROLE_RANK[a.role]) || a.email.localeCompare(b.email));
+  const owners = users.filter(u=>u.role==='全体管理').length;
+  return `
+  <div class="panel">
+    <h2>ユーザー管理 <span class="en">User accounts &amp; permission levels</span></h2>
+    <p class="muted" style="margin-bottom:12px">ここに登録されたメールアドレスだけがログインできます。追加後、本人にログイン画面の「新規登録（初回のみ）」からパスワードを設定してもらってください（パスワードは本人が決めます）。</p>
+    <div class="toolbar">
+      <input type="email" id="nu_email" placeholder="メールアドレス" style="width:240px">
+      <input id="nu_name" placeholder="氏名（任意）" style="width:160px">
+      <select id="nu_role">${ROLES.map(r=>`<option ${r==='社員'?'selected':''}>${r}</option>`).join('')}</select>
+      <button class="btn small" onclick="addUser()">＋ ユーザーを追加</button>
+    </div>
+    <div class="tablewrap"><table>
+      <tr><th>メールアドレス</th><th>氏名</th><th>権限レベル</th><th>追加日</th><th></th></tr>
+      ${users.map(u=>{
+        const self = u.email.toLowerCase()===myEmail();
+        const lastOwner = u.role==='全体管理' && owners<=1;
+        return `<tr>
+          <td><b>${esc(u.email)}</b> ${self?'<span class="muted">(自分)</span>':''}</td>
+          <td>${esc(u.name||'—')}</td>
+          <td>
+            ${(self||lastOwner)? roleBadge(u.role) : `<select onchange="setUserRole('${esc(u.email)}', this.value)">
+              ${ROLES.map(r=>`<option ${u.role===r?'selected':''}>${r}</option>`).join('')}
+            </select>`}
+          </td>
+          <td class="muted">${esc(u.addedAt||'—')}</td>
+          <td>${(self||lastOwner)?'<span class="muted">削除不可</span>':`<button class="btn small ghost" onclick="removeUser('${esc(u.email)}')">削除</button>`}</td>
+        </tr>`;
+      }).join('')||'<tr><td colspan="5" class="muted">ユーザーがいません。</td></tr>'}
+    </table></div>
+    <p class="muted" style="margin-top:8px">※自分自身の権限変更・削除はできません（管理者不在によるロックアウト防止）。最後の「全体管理」も変更・削除できません。</p>
+  </div>
+  <div class="panel">
+    <h2>権限レベルの説明 <span class="en">Permission levels</span></h2>
+    <div class="tablewrap"><table>
+      <tr><th style="width:110px">レベル</th><th>できること</th></tr>
+      ${ROLES.slice().reverse().map(r=>`<tr><td>${roleBadge(r)}</td><td>${esc(ROLE_DESC[r])}</td></tr>`).join('')}
+    </table></div>
+    <ul class="muted" style="margin:10px 0 0 18px;font-size:13px;line-height:1.9">
+      <li><b>社員</b>は、従業員マスタの「メールアドレス」欄が自分のログインメールと一致するレコードのみ表示されます。一致しない場合は何も表示されません。</li>
+      <li>権限の判定はサーバー側（Supabase の RLS）でも行われるため、画面を操作しても他人のデータは取得・変更できません。</li>
+      <li>退職者はまずここから削除し、Supabase の Authentication からアカウントも削除してください。</li>
+    </ul>
+  </div>`;
+}
+async function addUser(){
+  const em = document.getElementById('nu_email').value.trim().toLowerCase();
+  const name = document.getElementById('nu_name').value.trim();
+  const role = document.getElementById('nu_role').value;
+  if(!em || !em.includes('@')){ alert('メールアドレスを入力してください'); return; }
+  if(data.allowedUsers.some(u=>u.email.toLowerCase()===em)){ alert('既に登録されています'); return; }
+  if(!ROLES.includes(role)){ alert('権限レベルが不正です'); return; }
+  await q(sb.from('allowed_users').insert({email:em, display_name:name, role:role}));
+  data.allowedUsers.push({email:em, name:name, role:role, addedAt:today()});
+  render(); toast('追加しました');
+}
+async function setUserRole(em, role){
+  if(!ROLES.includes(role)) return;
+  if(em.toLowerCase()===myEmail()){ alert('自分自身の権限は変更できません'); render(); return; }
+  await q(sb.from('allowed_users').update({role:role}).eq('email', em));
+  const u = data.allowedUsers.find(x=>x.email===em);
+  if(u) u.role = role;
+  render(); toast(em+' を「'+role+'」に変更しました');
+}
+async function removeUser(em){
+  if(em.toLowerCase()===myEmail()){ alert('自分自身は削除できません'); return; }
+  if(!confirm(em+' のアクセス権を削除しますか？\n（ログインできなくなります）')) return;
+  await q(sb.from('allowed_users').delete().eq('email', em));
+  data.allowedUsers = data.allowedUsers.filter(x=>x.email!==em);
+  render(); toast('削除しました');
+}
+
 /* ---------------- data management ---------------- */
 function viewData(){
   return `
@@ -1315,13 +1492,10 @@ function viewData(){
     </div>
   </div>
   <div class="panel">
-    <h2>利用ユーザー <span class="en">ここに登録されたメールだけがログイン後にデータへアクセスできます</span></h2>
-    <div class="toolbar">
-      <input type="email" id="newAllowed" placeholder="追加するメールアドレス" style="width:260px">
-      <button class="btn small" onclick="addAllowed()">追加</button>
-    </div>
-    <div class="tag-row">${data.allowedUsers.map(em=>`<span class="badge b-blue" style="font-size:13px;padding:5px 10px">${esc(em)} ${em.toLowerCase()===(session?session.user.email:'').toLowerCase()?'<span class="muted">(自分)</span>':`<a href="javascript:removeAllowed('${esc(em)}')" style="color:var(--danger);text-decoration:none;margin-left:4px">✕</a>`}</span>`).join('')}</div>
-    <p class="muted" style="margin-top:8px">※追加した人は、ログイン画面の「新規登録」でそのメール＋任意のパスワードでアカウントを作成してから利用します。</p>
+    <h2>利用ユーザー <span class="en">User accounts</span></h2>
+    <p class="muted">利用者の追加・権限レベル（${ROLES.join('／')}）の変更は <b>「ユーザー管理」タブ</b> で行います${canAdmin()?'':'（全体管理者のみ）'}。
+    現在の登録：${data.allowedUsers.length}名（うち全体管理 ${data.allowedUsers.filter(u=>u.role==='全体管理').length}名）</p>
+    ${canAdmin()?'<button class="btn small secondary" style="margin-top:8px" onclick="go(\'users\')">ユーザー管理を開く</button>':''}
   </div>
   <div class="panel">
     <h2>部署マスタ</h2>
@@ -1355,7 +1529,7 @@ function viewData(){
     <h2>サンプルデータ</h2>
     <p class="muted" style="margin-bottom:8px">操作を試すためのサンプルデータ（従業員5名・評価・KPI・資産）を投入します。既存データに追加されます。</p>
     <button class="btn secondary" onclick="loadSample()">サンプルデータを投入</button>
-    <button class="btn danger" style="margin-left:8px" onclick="wipeAll()">全データを削除</button>
+    ${canAdmin()? '<button class="btn danger" style="margin-left:8px" onclick="wipeAll()">全データを削除</button>' : ''}
   </div>
   <div class="panel">
     <h2>個人情報の取扱いに関する注意</h2>
@@ -1366,21 +1540,6 @@ function viewData(){
       <li>外国人雇用状況届出（雇入れ・離職時）はハローワークへの届出が<b>法的義務</b>です。書類チェックリストで漏れを防いでください。</li>
     </ul>
   </div>`;
-}
-async function addAllowed(){
-  const em = document.getElementById('newAllowed').value.trim().toLowerCase();
-  if(!em || !em.includes('@')){ alert('メールアドレスを入力してください'); return; }
-  if(data.allowedUsers.some(x=>x.toLowerCase()===em)){ alert('既に登録されています'); return; }
-  await q(sb.from('allowed_users').insert({email:em}));
-  data.allowedUsers.push(em);
-  render(); toast('追加しました');
-}
-async function removeAllowed(em){
-  if(em.toLowerCase()===(session?session.user.email:'').toLowerCase()){ alert('自分自身は削除できません'); return; }
-  if(!confirm(em+' のアクセス権を削除しますか？')) return;
-  await q(sb.from('allowed_users').delete().eq('email', em));
-  data.allowedUsers = data.allowedUsers.filter(x=>x!==em);
-  render(); toast('削除しました');
 }
 async function addDept(){
   const v = document.getElementById('newDept').value.trim();
@@ -1419,6 +1578,7 @@ async function resetTpl(){
   render(); toast('初期状態に戻しました');
 }
 async function wipeAll(){
+  if(!canAdmin()){ toast('全データ削除は「全体管理」権限のみ実行できます', true); return; }
   if(!confirm('本当に全データ（従業員・評価・KPI・資産・書類記録）を削除しますか？この操作は元に戻せません。')) return;
   if(!confirm('最終確認：バックアップは保存済みですか？削除を実行します。')) return;
   await q(sb.from('assets').delete().neq('id','00000000-0000-0000-0000-000000000000'));
@@ -1449,6 +1609,7 @@ function exportJson(){
   download(`KMT-HR-backup-${today()}.json`, JSON.stringify(out, null, 1), 'application/json');
 }
 async function importJson(){
+  if(!canAdmin()){ toast('取込（全置換）は「全体管理」権限のみ実行できます', true); return; }
   const f = document.getElementById('importFile').files[0];
   if(!f){ alert('JSONファイルを選択してください'); return; }
   const text = await f.text();
