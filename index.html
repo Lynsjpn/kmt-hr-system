@@ -116,7 +116,21 @@ footer{text-align:center;color:var(--sub);font-size:11px;padding:16px}
    ============================================================ */
 const SUPABASE_URL = 'https://brktkgkbmcqubeuhehpv.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_wv0PLH_4hHIt_lCnA6_ZHA_D_jpF1Zd';
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+// ログイン状態を保持する設定。
+// persistSession   : セッションを localStorage に保存し、タブを閉じても残す
+// autoRefreshToken : 期限切れ前にトークンを自動更新（開かないまま長期間放置しない限り再ログイン不要）
+// storageKey       : キーを固定し、更新のたびにログアウトされるのを防ぐ
+// 注意: 保存先はブラウザごと・URLごと。公開URLとローカルファイルでは別扱いになるため、
+//       いつも同じURL（https://lynsjpn.github.io/kmt-hr-system/）を開くこと。
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    storage: window.localStorage,
+    storageKey: 'kmt-hr-auth',
+  }
+});
 
 const DEFAULT_DOC_TEMPLATES = [
  {id:'d01', stage:'入社前', name:'履歴書・職務経歴書', tags:['all'], note:'', sort_order:1},
@@ -2070,8 +2084,10 @@ function modal(html){
 function closeModal(){ document.getElementById('modalBg').classList.remove('open'); }
 document.getElementById('modalBg').addEventListener('click', e=>{ if(e.target.id==='modalBg') closeModal(); });
 
-sb.auth.onAuthStateChange((event)=>{
-  if(event==='SIGNED_OUT'){ session=null; showLogin(); }
+sb.auth.onAuthStateChange((event, s)=>{
+  if(event==='SIGNED_OUT'){ session=null; showLogin(); return; }
+  // トークン自動更新後も session を最新に保つ（古いトークンを持ち続けないため）
+  if(s) session = s;
 });
 boot();
 </script>
