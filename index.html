@@ -7,22 +7,76 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
 :root{
-  --bg:#f4f6f9; --panel:#ffffff; --border:#dde3ea; --text:#1f2937; --sub:#6b7280;
-  --accent:#1a56a8; --accent-soft:#e8f0fb; --danger:#c0392b; --danger-soft:#fdecea;
+  /* ピンク基調（薄ピンク×淡ピンク） */
+  --bg:#fdf6f9; --panel:#ffffff; --border:#f3d7e3; --text:#3d2530; --sub:#9b7a89;
+  --accent:#d6336c; --accent-soft:#fce7f0; --danger:#c0392b; --danger-soft:#fdecea;
   --warn:#b7791f; --warn-soft:#fdf3e3; --ok:#1e7e4e; --ok-soft:#e6f4ec;
   --radius:10px;
+  --sb-w:250px;            /* サイドバー幅 */
+  --sb-bg:#fbe3ee;         /* サイドバー背景（ピンク薄） */
+  --sb-deep:#e9679f;       /* セクション見出し（ピンク濃いめ） */
+  --sb-deep2:#f08cb8;      /* セクション見出しホバー */
+  --sb-head:#e75a97;       /* ブランドカードのピンク */
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:"Hiragino Kaku Gothic ProN","Yu Gothic UI","Meiryo",sans-serif;background:var(--bg);color:var(--text);font-size:14px}
-header{background:#12325e;color:#fff;padding:10px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
-header h1{font-size:17px;font-weight:700}
-header .sub{font-size:11px;opacity:.75}
-nav{display:flex;gap:4px;flex-wrap:wrap;margin-left:auto;align-items:center}
-nav button{background:transparent;border:none;color:#cdd9ea;padding:8px 12px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600}
-nav button:hover{background:rgba(255,255,255,.12);color:#fff}
-nav button.active{background:#fff;color:#12325e}
-nav .userchip{font-size:11px;color:#cdd9ea;margin-left:8px;border-left:1px solid rgba(255,255,255,.25);padding-left:12px}
-main{max-width:1280px;margin:0 auto;padding:20px}
+/* ===== 左サイドバー・レイアウト ===== */
+.app{display:flex;min-height:100vh}
+aside#sidebar{width:var(--sb-w);flex-shrink:0;background:var(--sb-bg);border-right:1px solid var(--border);
+  position:sticky;top:0;height:100vh;overflow-y:auto;padding:12px 10px 20px;scrollbar-width:thin}
+.app.nologin aside#sidebar,.app.nologin #sbToggle{display:none}
+.content{flex:1;min-width:0;display:flex;flex-direction:column}
+main{width:100%;max-width:1280px;margin:0 auto;padding:20px;flex:1}
+/* ブランドカード */
+.sb-brand{background:linear-gradient(160deg,var(--sb-head),#d6336c);border-radius:14px;padding:14px 12px;text-align:center;color:#fff;margin-bottom:10px}
+.sb-brand .logo{background:#fff;border-radius:10px;width:64px;height:64px;margin:0 auto 8px;display:flex;align-items:center;justify-content:center;
+  color:var(--accent);font-weight:900;font-size:20px;letter-spacing:1px;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+.sb-brand h1{font-size:15px;font-weight:800;line-height:1.4}
+.sb-brand .ver{font-size:10px;opacity:.9;text-decoration:underline;margin-top:2px;display:inline-block;color:#fff}
+/* ユーザー行 */
+.sb-user{display:flex;align-items:center;gap:6px;font-size:12px;padding:4px 6px;margin-bottom:8px}
+.sb-user .dot{width:8px;height:8px;border-radius:50%;background:#2ecc71;flex-shrink:0}
+.sb-user b{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sb-user .st{color:var(--sub);font-size:11px}
+/* マイページボタン */
+.sb-mypage{display:flex;align-items:center;justify-content:center;gap:6px;background:#fff;border:1px solid var(--border);
+  border-radius:999px;padding:8px;font-size:13px;font-weight:800;color:var(--accent);cursor:pointer;width:100%;margin-bottom:10px;
+  box-shadow:0 1px 4px rgba(214,51,108,.12)}
+.sb-mypage:hover{background:var(--accent-soft)}
+/* アラートカード */
+.sb-alert{background:#fff;border:1px solid var(--border);border-radius:10px;padding:8px 10px;margin-bottom:8px;cursor:pointer;font-size:12px}
+.sb-alert:hover{background:var(--accent-soft)}
+.sb-alert .row{display:flex;align-items:center;gap:6px;padding:2px 0}
+.sb-alert .row b{flex:1;font-size:12px}
+.sb-alert .cnt{background:var(--danger);color:#fff;border-radius:999px;font-size:11px;font-weight:800;padding:1px 8px}
+.sb-alert .cnt.y{background:var(--warn)}
+.sb-alert .cnt.z{background:#c8ccd4}
+.sb-alert .sub-row{display:flex;justify-content:space-between;font-size:11px;color:var(--sub);padding:1px 0 1px 14px}
+/* メニューグループ */
+.sb-group{margin-bottom:6px}
+.sb-group>button{width:100%;display:flex;align-items:center;gap:8px;background:var(--sb-deep);border:none;color:#fff;
+  padding:9px 12px;border-radius:9px;cursor:pointer;font-size:13px;font-weight:800}
+.sb-group>button:hover{background:var(--sb-deep2)}
+.sb-group>button .arrow{font-size:10px;width:12px}
+.sb-group>button .gcnt{margin-left:auto;background:rgba(255,255,255,.3);border-radius:999px;padding:1px 8px;font-size:11px}
+.sb-items{padding:4px 0 2px}
+.sb-item{width:100%;display:flex;align-items:center;gap:8px;background:transparent;border:none;text-align:left;
+  padding:8px 10px 8px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;color:var(--text)}
+.sb-item:hover{background:#fff}
+.sb-item.active{background:#fff;color:var(--accent);font-weight:800;box-shadow:0 1px 4px rgba(214,51,108,.15)}
+.sb-item .ic{width:18px;text-align:center}
+.sb-single{margin-bottom:6px}
+.sb-foot{margin-top:10px;text-align:center}
+.sb-foot a{color:var(--accent);font-size:12px}
+/* モバイル：ハンバーガーで開閉 */
+#sbToggle{display:none;position:fixed;top:10px;left:10px;z-index:60;background:var(--accent);color:#fff;border:none;
+  border-radius:8px;width:38px;height:38px;font-size:18px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+@media(max-width:860px){
+  #sbToggle{display:block}
+  aside#sidebar{position:fixed;left:0;top:0;z-index:55;transform:translateX(-105%);transition:transform .2s;box-shadow:4px 0 20px rgba(0,0,0,.15)}
+  aside#sidebar.open{transform:translateX(0)}
+  main{padding:56px 12px 20px}
+}
 .panel{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:16px}
 .panel h2{font-size:16px;margin-bottom:12px;display:flex;align-items:center;gap:8px}
 .panel h2 .en{font-size:11px;color:var(--sub);font-weight:400}
@@ -125,19 +179,18 @@ footer{text-align:center;color:var(--sub);font-size:11px;padding:16px}
 .login-msg{font-size:12px;margin-top:10px;color:var(--danger)}
 .login-msg.ok{color:var(--ok)}
 @media(max-width:700px){.formgrid{grid-template-columns:1fr}}
-@media print{header nav,.toolbar,button{display:none!important}}
+@media print{aside#sidebar,#sbToggle,.toolbar,button{display:none!important}}
 </style>
 </head>
 <body>
-<header>
-  <div>
-    <h1>KMT 人事管理システム</h1>
-    <div class="sub">クラウド版（Supabase）— 人事情報・労務書類・評価・KPI・資産</div>
+<button id="sbToggle" onclick="document.getElementById('sidebar').classList.toggle('open')">☰</button>
+<div class="app" id="app">
+  <aside id="sidebar"></aside>
+  <div class="content">
+    <main id="main"><div class="login-wrap"><div class="muted">読み込み中…</div></div></main>
+    <footer>データは Supabase（東京リージョン）に保存されます。アクセスには登録済みメールでのログインが必要です。</footer>
   </div>
-  <nav id="nav"></nav>
-</header>
-<main id="main"><div class="login-wrap"><div class="muted">読み込み中…</div></div></main>
-<footer>データは Supabase（東京リージョン）に保存されます。アクセスには登録済みメールでのログインが必要です。</footer>
+</div>
 <div class="modal-bg" id="modalBg"><div class="modal" id="modalBox"></div></div>
 <div id="toast"></div>
 
@@ -541,7 +594,7 @@ async function start(){
   try{ await loadAll(); }
   catch(e){ showLogin('データ取得に失敗しました：'+e.message); return; }
   if(!data.allowedUsers.length || !myUser()){
-    document.getElementById('nav').innerHTML='';
+    hideSidebar();
     document.getElementById('main').innerHTML = `
     <div class="login-wrap"><div class="login-card">
       <h2>アクセス権がありません</h2>
@@ -569,8 +622,12 @@ async function autoSeed(){
     }
   }catch(e){ /* 初期化に失敗しても通常の利用は継続する */ }
 }
+function hideSidebar(){
+  document.getElementById('sidebar').innerHTML='';
+  document.getElementById('app').classList.add('nologin');
+}
 function showLogin(msg, ok){
-  document.getElementById('nav').innerHTML='';
+  hideSidebar();
   document.getElementById('main').innerHTML = `
   <div class="login-wrap"><div class="login-card">
     <h2>ログイン</h2>
@@ -638,15 +695,75 @@ function navAllowed(key){
   const it = NAV.find(n=>n[0]===key);
   return !!it && myRank() >= it[2];
 }
+
+/* ===== サイドバー（ピンク基調・グループ折りたたみ式） ===== */
+const APP_VER = 'ver.20260827.1';
+const NAV_GROUPS = [
+  {key:'jinzai', label:'人材管理',   items:[['talent','👥','タレント'],['employees','🗂','従業員・人事情報'],['skills','🧭','スキル管理'],['evals','📝','評価管理']]},
+  {key:'romu',   label:'労務・書類', items:[['docs','📄','労務・書類管理'],['guide','📘','手続きガイド']]},
+  {key:'keiei',  label:'経営管理',   items:[['kpi','📈','KPI管理'],['assets','💼','資産管理']]},
+  {key:'system', label:'設定',       items:[['users','👤','ユーザー管理'],['data','⚙️','データ管理']]},
+];
+let sbOpen = {jinzai:true, romu:true, keiei:true, system:false};
+function toggleGroup(k){ sbOpen[k]=!sbOpen[k]; renderNav(); }
+function goMyPage(){
+  const id = myEmpId();
+  if(id){ openEmp(id); } else { go('dashboard'); }
+  document.getElementById('sidebar').classList.remove('open');
+}
 function renderNav(){
-  document.getElementById('nav').innerHTML = NAV.filter(n=>myRank()>=n[2]).map(([k,l])=>
-    `<button class="${view===k?'active':''}" onclick="go('${k}')">${l}</button>`).join('')
-    + `<button title="最新データを取得" onclick="reloadData()">↻</button>`
-    + `<span class="userchip">${esc(session?session.user.email:'')} <span class="badge b-blue" style="margin-left:6px">${esc(myRole())}</span> <a href="javascript:logout()" style="color:#9fc3f0">ログアウト</a></span>`;
+  document.getElementById('app').classList.remove('nologin');
+  const u = myUser()||{};
+  const uname = u.name || (myEmail().split('@')[0]) || '';
+  /* アラート集計（権限に応じて自分の担当分のみ） */
+  let alerts=[]; try{ alerts = buildAlerts(); }catch(e){}
+  if(myRank()<2){ const scoped=scopeEmps(data.employees); alerts = alerts.filter(a=>scoped.some(e=>e.id===a.emp.id)); }
+  const red = alerts.filter(a=>a.level==='red').length;
+  const yel = alerts.filter(a=>a.level==='yellow').length;
+  const alertTitle = myRank()>=2 ? '全体アラート' : '自分の担当のアラート';
+
+  const groups = NAV_GROUPS.map(g=>{
+    const items = g.items.filter(([k])=>navAllowed(k));
+    if(!items.length) return '';
+    const open = sbOpen[g.key];
+    return `<div class="sb-group">
+      <button onclick="toggleGroup('${g.key}')">
+        <span class="arrow">${open?'▼':'▶'}</span>${esc(g.label)}
+        <span class="gcnt">${items.length}</span>
+      </button>
+      ${open? `<div class="sb-items">${items.map(([k,ic,l])=>`
+        <button class="sb-item ${view===k?'active':''}" onclick="go('${k}')">
+          <span class="ic">${ic}</span>${esc(l)}</button>`).join('')}</div>`:''}
+    </div>`;
+  }).join('');
+
+  document.getElementById('sidebar').innerHTML = `
+    <div class="sb-brand">
+      <div class="logo">KMT</div>
+      <h1>KMT 人事管理システム</h1>
+      <a class="ver" href="javascript:reloadData()" title="クリックで最新データを再取得">${APP_VER}</a>
+    </div>
+    <div class="sb-user">
+      <span class="dot"></span><b title="${esc(myEmail())}">${esc(uname)}（${esc(myRole())}）</b><span class="st">アクティブ</span>
+    </div>
+    <button class="sb-mypage" onclick="goMyPage()">📋 マイページ</button>
+    ${myRank()>=1? `
+    <div class="sb-alert" onclick="go('dashboard')">
+      <div class="row">🔔 <b>${alertTitle}</b><span class="cnt ${red?'':'z'}">${red+yel}</span></div>
+      <div class="sub-row"><span>🔴 要対応</span><span>${red}</span></div>
+      <div class="sub-row"><span>🟡 注意（90日以内など）</span><span>${yel}</span></div>
+    </div>`:''}
+    <div class="sb-single">
+      <button class="sb-item ${view==='dashboard'?'active':''}" onclick="go('dashboard')">
+        <span class="ic">🏠</span>ダッシュボード</button>
+    </div>
+    ${groups}
+    <div class="sb-foot"><a href="javascript:logout()">ログアウト</a></div>`;
 }
 function go(v){
   if(!navAllowed(v)){ toast('このタブを表示する権限がありません', true); return; }
   view=v; if(v!=='employees') currentEmpId=null; render(); window.scrollTo(0,0);
+  document.getElementById('sidebar').classList.remove('open');
 }
 function render(){
   if(!navAllowed(view)) view='dashboard';
