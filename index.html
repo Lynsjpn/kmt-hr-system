@@ -81,6 +81,38 @@ button.btn.ghost{background:#fff;color:var(--sub);border:1px solid var(--border)
 .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:13px}
 .kv dt{color:var(--sub);white-space:nowrap}
 .kv dd{font-weight:600}
+/* ===== タレント（カオナビ型 顔写真一覧）===== */
+.talent-grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(var(--card-w,150px),1fr))}
+.tcard{background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px 10px;text-align:center;cursor:pointer;transition:box-shadow .15s, transform .15s}
+.tcard:hover{box-shadow:0 6px 20px rgba(18,50,94,.15);transform:translateY(-2px)}
+.avatar{width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 8px;color:#fff;font-weight:800;font-size:22px;letter-spacing:.5px}
+.avatar.sm{width:34px;height:34px;font-size:13px;margin:0}
+.avatar.lg{width:80px;height:80px;font-size:28px}
+.tcard .tname{font-weight:700;font-size:13px;line-height:1.3;word-break:break-word}
+.tcard .troma{font-size:10px;color:var(--sub);word-break:break-word}
+.tcard .tmeta{font-size:11px;color:var(--sub);margin-top:6px;line-height:1.5}
+.tcard .tag-row{justify-content:center;margin-top:6px}
+.viewseg{display:inline-flex;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.viewseg button{background:#fff;border:none;padding:7px 12px;font-size:12px;cursor:pointer;color:var(--sub)}
+.viewseg button.active{background:var(--accent);color:#fff;font-weight:700}
+/* ===== スキル管理 ===== */
+.skmap td{text-align:center;padding:4px 6px;min-width:44px}
+.skmap td.namecell{text-align:left;white-space:nowrap;position:sticky;left:0;background:#fff;z-index:1}
+.skmap th.cat{background:var(--accent-soft);color:var(--accent);font-size:11px}
+.sklv{display:inline-block;width:30px;height:24px;line-height:24px;border-radius:6px;font-size:12px;font-weight:700;text-align:center}
+.lv0{background:#f1f3f6;color:#b7bec8}
+.lv1{background:#e8f0fb;color:#5b83b8}
+.lv2{background:#cfe0f5;color:#3567a3}
+.lv3{background:#9dc1e8;color:#1c4a86}
+.lv4{background:#5b93cf;color:#fff}
+.lv5{background:#1a56a8;color:#fff}
+.sk-input-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px}
+.sk-input-row .skname{flex:1}
+.lvseg{display:inline-flex;gap:3px}
+.lvseg button{width:30px;height:26px;border:1px solid var(--border);background:#fff;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700;color:var(--sub)}
+.lvseg button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.radar-wrap{display:flex;justify-content:center}
+.legend-dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
 footer{text-align:center;color:var(--sub);font-size:11px;padding:16px}
 #toast{position:fixed;bottom:18px;right:18px;background:#12325e;color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;display:none;z-index:99;box-shadow:0 8px 24px rgba(0,0,0,.3)}
 #toast.err{background:var(--danger)}
@@ -184,6 +216,37 @@ const ASSET_CATS = ['PC','モニター','スマートフォン','SIM/回線','�
 const ASSET_STATUSES = ['在庫','貸与中','使用中','修理中','紛失','廃棄'];
 const GRADES = ['S','A','B','C','D'];
 
+/* ===== スキル管理（カオナビ型）マスタ ===== */
+const SKILL_LEVELS = {
+  0:'未評価', 1:'基礎知識あり', 2:'指導のもとで実行できる', 3:'一人で実行できる',
+  4:'応用・改善ができる', 5:'他者に指導できる',
+};
+const DEFAULT_SKILL_DEFS = [
+ {id:'s01', category:'語学・コミュニケーション', name:'日本語（ビジネス）', description:'会議・文書・電話応対レベル', sort_order:1},
+ {id:'s02', category:'語学・コミュニケーション', name:'英語', description:'業務コミュニケーションレベル', sort_order:2},
+ {id:'s03', category:'語学・コミュニケーション', name:'多文化コミュニケーション', description:'国籍・文化の異なる相手との調整力', sort_order:3},
+ {id:'s10', category:'紹介営業', name:'新規開拓・アポ獲得', description:'', sort_order:10},
+ {id:'s11', category:'紹介営業', name:'求人ヒアリング・提案', description:'', sort_order:11},
+ {id:'s12', category:'紹介営業', name:'クロージング・条件交渉', description:'', sort_order:12},
+ {id:'s13', category:'紹介営業', name:'顧客関係維持', description:'既存顧客フォロー・リピート獲得', sort_order:13},
+ {id:'s20', category:'支援業務', name:'入管手続き・申請書類', description:'在留資格の申請・更新・届出', sort_order:20},
+ {id:'s21', category:'支援業務', name:'生活オリエンテーション', description:'住居・銀行・行政手続きの案内', sort_order:21},
+ {id:'s22', category:'支援業務', name:'定期面談・相談対応', description:'', sort_order:22},
+ {id:'s23', category:'支援業務', name:'行政・関係機関連携', description:'入管・ハローワーク・支援団体との調整', sort_order:23},
+ {id:'s30', category:'マーケティング', name:'SNS運用・発信', description:'', sort_order:30},
+ {id:'s31', category:'マーケティング', name:'コンテンツ制作', description:'画像・動画・記事の制作', sort_order:31},
+ {id:'s32', category:'マーケティング', name:'採用マーケティング', description:'求職者集客・母集団形成', sort_order:32},
+ {id:'s33', category:'マーケティング', name:'データ分析', description:'数値管理・レポート作成', sort_order:33},
+ {id:'s40', category:'バックオフィス', name:'労務・勤怠管理', description:'', sort_order:40},
+ {id:'s41', category:'バックオフィス', name:'経理・請求業務', description:'', sort_order:41},
+ {id:'s42', category:'バックオフィス', name:'契約書・文書管理', description:'', sort_order:42},
+ {id:'s43', category:'バックオフィス', name:'PC・ITツール活用', description:'Excel・クラウドツール等', sort_order:43},
+ {id:'s50', category:'共通・マネジメント', name:'問題解決・改善提案', description:'', sort_order:50},
+ {id:'s51', category:'共通・マネジメント', name:'後輩指導・OJT', description:'', sort_order:51},
+ {id:'s52', category:'共通・マネジメント', name:'チームマネジメント', description:'', sort_order:52},
+ {id:'s53', category:'共通・マネジメント', name:'コンプライアンス理解', description:'個人情報・入管法・労働法の理解', sort_order:53},
+];
+
 /* ===== 権限レベル ===== */
 const ROLES = ['ゲスト','社員','管理者','全体管理'];
 const ROLE_RANK = {'ゲスト':0,'社員':1,'管理者':2,'全体管理':3};
@@ -252,13 +315,18 @@ const KPI_LIBRARY = [
 ];
 
 /* ---------------- state ---------------- */
-let data = {departments:[], employees:[], evaluations:[], kpis:[], assets:[], docTemplates:[], allowedUsers:[]};
+let data = {departments:[], employees:[], evaluations:[], kpis:[], assets:[], docTemplates:[], allowedUsers:[], skillDefs:[], empSkills:{}};
 let session = null;
 let view = 'dashboard';
 let empFilter = {q:'', status:'在籍', type:'', dept:''};
 let currentEmpId = null;
 let evalPeriodFilter = '';
 let kpiPeriodFilter = '';
+/* タレント一覧の表示状態（カオナビ型 3段階ビュー） */
+let talentFilter = {q:'', dept:'', nat:'', status:'在籍', size:'m', incFamily:false};
+/* スキル管理タブの状態 */
+let skillSub = 'map';       // map | input | summary | master
+let skillEmpId = '';        // 入力対象の従業員
 
 function uid(){ return crypto.randomUUID(); }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -362,7 +430,7 @@ function dbToAsset(r){ return {id:r.id, assetNo:r.asset_no, category:r.category,
 function assetToDb(a){ return {id:a.id, asset_no:a.assetNo||'', category:a.category, name:a.name, serial:a.serial||'', purchase_date:dOrNull(a.purchaseDate), price:a.price||'', status:a.status, assigned_to:dOrNull(a.assignedTo), lend_date:dOrNull(a.lendDate), return_date:dOrNull(a.returnDate), notes:a.notes||''}; }
 
 async function loadAll(){
-  const [deps, tpls, emps, docs, evals, kpis, assets, allowed] = await Promise.all([
+  const [deps, tpls, emps, docs, evals, kpis, assets, allowed, skdefs, esk] = await Promise.all([
     q(sb.from('departments').select('*').order('sort_order')),
     q(sb.from('doc_templates').select('*').order('sort_order')),
     q(sb.from('employees').select('*')),
@@ -371,7 +439,15 @@ async function loadAll(){
     q(sb.from('kpis').select('*')),
     q(sb.from('assets').select('*')),
     q(sb.from('allowed_users').select('*').order('added_at')),
+    q(sb.from('skill_defs').select('*').order('sort_order')),
+    q(sb.from('employee_skills').select('*')),
   ]);
+  data.skillDefs = skdefs;
+  data.empSkills = {};
+  esk.forEach(r=>{
+    if(!data.empSkills[r.employee_id]) data.empSkills[r.employee_id] = {};
+    data.empSkills[r.employee_id][r.skill_id] = {level:r.level, note:r.note||''};
+  });
   data.departments = deps.map(d=>d.name);
   data._deptRows = deps;
   data.docTemplates = tpls.map(t=>({id:t.id, stage:t.stage, name:t.name, tags:t.tags, note:t.note, sort_order:t.sort_order}));
@@ -547,9 +623,11 @@ async function reloadData(){
 /* [キー, 表示名, 必要な最低ランク] */
 const NAV = [
   ['dashboard','ダッシュボード',0],
+  ['talent','タレント',1],
   ['employees','従業員・人事情報',1],
   ['docs','労務・書類管理',1],
   ['evals','評価管理',1],
+  ['skills','スキル管理',1],
   ['kpi','KPI管理',1],
   ['assets','資産管理',2],
   ['guide','手続きガイド',0],
@@ -575,6 +653,8 @@ function render(){
   renderNav();
   const m = document.getElementById('main');
   if(view==='dashboard') m.innerHTML = viewDashboard();
+  else if(view==='talent') m.innerHTML = viewTalent();
+  else if(view==='skills') m.innerHTML = viewSkills();
   else if(view==='employees') m.innerHTML = currentEmpId? viewEmpDetail(currentEmpId) : viewEmployees();
   else if(view==='docs') m.innerHTML = viewDocs();
   else if(view==='evals') m.innerHTML = viewEvals();
@@ -583,6 +663,332 @@ function render(){
   else if(view==='guide') m.innerHTML = viewGuide();
   else if(view==='users') m.innerHTML = viewUsers();
   else if(view==='data') m.innerHTML = viewData();
+}
+
+/* ================= タレント・スキル（カオナビ型） ================= */
+/* イニシャルアバター（顔写真の代わり）。名前から色を決めて安定させる */
+const AVATAR_COLORS = ['#1a56a8','#1e7e4e','#b7791f','#7c3aed','#c2410c','#0e7490','#be185d','#4d7c0f'];
+function avatarOf(e, cls){
+  const src = (e.nameRoma||e.nameKanji||'?').trim();
+  const parts = src.split(/\s+/);
+  let ini;
+  if(/^[\x20-\x7e]+$/.test(src)){ // ローマ字 → 先頭2語の頭文字
+    ini = parts.slice(0,2).map(w=>w[0]).join('').toUpperCase();
+  } else {
+    ini = src.replace(/\s/g,'').slice(0,2); // 漢字・かな → 先頭2文字
+  }
+  let h=0; for(const ch of src) h=(h*31+ch.charCodeAt(0))>>>0;
+  const col = AVATAR_COLORS[h % AVATAR_COLORS.length];
+  return `<div class="avatar ${cls||''}" style="background:${col}">${esc(ini)}</div>`;
+}
+function isFamilyRec(e){ return (e.position||'')==='家族（社員外）'; }
+
+/* スキルユーティリティ */
+function skillCats(){ return [...new Set(data.skillDefs.map(s=>s.category))]; }
+function catShort(c){ return c.split('・')[0].slice(0,4); }
+function skillLevelOf(empId, skillId){
+  const m = data.empSkills[empId]; return m && m[skillId] ? m[skillId].level : 0;
+}
+function catAverages(empId){
+  return skillCats().map(cat=>{
+    const defs = data.skillDefs.filter(s=>s.category===cat);
+    const sum = defs.reduce((a,s)=>a+skillLevelOf(empId,s.id),0);
+    return {cat, avg: defs.length? sum/defs.length : 0};
+  });
+}
+function empHasSkills(empId){ const m=data.empSkills[empId]; return m && Object.values(m).some(v=>v.level>0); }
+
+/* レーダーチャート（SVG）。labels/values は同じ長さ、max=5 */
+function radarSvg(labels, values, size, opts){
+  const o = opts||{};
+  const n = labels.length; if(n<3) return '';
+  const max = o.max||5, cx=size/2, cy=size/2, r=size/2 - (o.pad!=null?o.pad:30);
+  const pt = (i,v)=>{ const a = -Math.PI/2 + i*2*Math.PI/n; const rr=r*v/max;
+    return [cx+rr*Math.cos(a), cy+rr*Math.sin(a)]; };
+  let grid='';
+  for(let g=1; g<=max; g++){
+    grid += `<polygon points="${labels.map((_,i)=>pt(i,g).map(x=>x.toFixed(1)).join(',')).join(' ')}"
+      fill="none" stroke="${g===max?'#c6cfda':'#e5eaf1'}" stroke-width="1"/>`;
+  }
+  const axes = labels.map((_,i)=>{ const [x,y]=pt(i,max);
+    return `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="#e5eaf1"/>`; }).join('');
+  const poly = labels.map((_,i)=>pt(i,values[i]).map(x=>x.toFixed(1)).join(',')).join(' ');
+  const dots = labels.map((_,i)=>{ const [x,y]=pt(i,values[i]);
+    return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.5" fill="#1a56a8"/>`; }).join('');
+  const texts = labels.map((l,i)=>{ const a=-Math.PI/2 + i*2*Math.PI/n;
+    const x=cx+(r+13)*Math.cos(a), y=cy+(r+13)*Math.sin(a);
+    const anchor = Math.abs(Math.cos(a))<.3?'middle':(Math.cos(a)>0?'start':'end');
+    return `<text x="${x.toFixed(1)}" y="${(y+3).toFixed(1)}" text-anchor="${anchor}"
+      font-size="${o.fs||10}" fill="#6b7280">${esc(l)}</text>`; }).join('');
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+    ${grid}${axes}
+    <polygon points="${poly}" fill="rgba(26,86,168,.22)" stroke="#1a56a8" stroke-width="1.5"/>
+    ${dots}${texts}</svg>`;
+}
+function empRadar(empId, size, fs){
+  const cats = catAverages(empId);
+  return radarSvg(cats.map(c=>catShort(c.cat)), cats.map(c=>c.avg), size||160, {fs:fs||10});
+}
+
+/* ---------------- タレント一覧（プロファイルブック） ---------------- */
+function latestGrade(empId){
+  const evs = data.evaluations.filter(v=>v.empId===empId && v.status==='確定')
+    .sort((a,b)=>(b.period||'').localeCompare(a.period||''));
+  if(!evs.length) return '';
+  const c = evalCalc(evs[0]); return c.rank||'';
+}
+function viewTalent(){
+  if(myRank()<1) return `<div class="panel"><h2>閲覧権限がありません</h2></div>`;
+  const f = talentFilter;
+  let list = scopeEmps(data.employees);
+  if(!f.incFamily) list = list.filter(e=>!isFamilyRec(e));
+  if(f.status) list = list.filter(e=>e.status===f.status);
+  if(f.dept) list = list.filter(e=>e.department===f.dept);
+  if(f.nat) list = list.filter(e=>e.nationality===f.nat);
+  if(f.q){ const s=f.q.toLowerCase();
+    list = list.filter(e=>(e.nameKanji+e.nameKana+e.nameRoma+e.empNo+e.email).toLowerCase().includes(s)); }
+  list.sort((a,b)=>(a.empNo||'zzz').localeCompare(b.empNo||'zzz'));
+  const nats = [...new Set(scopeEmps(data.employees).map(e=>e.nationality).filter(Boolean))];
+  const cardW = f.size==='s'?110 : f.size==='l'?250 : 155;
+  const cards = list.map(e=>{
+    const zd = daysUntil(e.zairyuExpiry);
+    const grade = latestGrade(e.id);
+    let body = `${avatarOf(e, f.size==='l'?'lg':'')}
+      <div class="tname">${esc(e.nameKanji||e.nameRoma)}</div>`;
+    if(f.size!=='s') body += `<div class="troma">${esc(e.nameRoma||'')}</div>`;
+    if(f.size==='m') body += `
+      <div class="tmeta">${esc(e.department||'部署未設定')}${e.position?` / ${esc(e.position)}`:''}</div>
+      <div class="tag-row">
+        ${e.isForeign?`<span class="badge b-yellow">${esc(e.nationality)}</span>`:''}
+        ${grade?`<span class="badge ${grade==='S'||grade==='A'?'b-green':'b-blue'}">評価 ${grade}</span>`:''}
+      </div>`;
+    if(f.size==='l') body += `
+      <div class="tmeta">${esc(e.department||'部署未設定')}${e.position?` / ${esc(e.position)}`:''}<br>
+        ${esc(e.employmentType||'')}${e.isForeign?` ・ ${esc(e.nationality)}`:''}</div>
+      <div class="tag-row">
+        ${grade?`<span class="badge ${grade==='S'||grade==='A'?'b-green':'b-blue'}">評価 ${grade}</span>`:''}
+        ${zd!==null&&zd<=180?`<span class="badge ${zd<=60?'b-red':'b-yellow'}">在留あと${zd}日</span>`:''}
+      </div>
+      ${empHasSkills(e.id)?`<div class="radar-wrap">${empRadar(e.id, 150, 8)}</div>`
+        :`<div class="muted" style="margin-top:8px">スキル未評価</div>`}`;
+    return `<div class="tcard" onclick="openEmp('${e.id}')">${body}</div>`;
+  }).join('');
+  return `
+  <div class="panel">
+    <h2>タレント <span class="en">Profile Book — 顔ぶれから探す人材データベース</span></h2>
+    <div class="toolbar">
+      <input placeholder="名前・社員番号で検索" value="${esc(f.q)}"
+        oninput="talentFilter.q=this.value;render()" style="min-width:170px">
+      <select onchange="talentFilter.status=this.value;render()">
+        <option value="">全ステータス</option>
+        ${EMP_STATUSES.map(s=>`<option ${f.status===s?'selected':''}>${s}</option>`).join('')}
+      </select>
+      <select onchange="talentFilter.dept=this.value;render()">
+        <option value="">全部署</option>
+        ${data.departments.map(d=>`<option ${f.dept===d?'selected':''}>${esc(d)}</option>`).join('')}
+      </select>
+      <select onchange="talentFilter.nat=this.value;render()">
+        <option value="">全国籍</option>
+        ${nats.map(n=>`<option ${f.nat===n?'selected':''}>${esc(n)}</option>`).join('')}
+      </select>
+      <label style="font-size:12px;color:var(--sub);display:flex;align-items:center;gap:4px">
+        <input type="checkbox" ${f.incFamily?'checked':''} onchange="talentFilter.incFamily=this.checked;render()">家族・社員外も表示
+      </label>
+      <div class="spacer"></div>
+      <span class="muted">${list.length}名</span>
+      <div class="viewseg">
+        ${[['s','小'],['m','中'],['l','大']].map(([k,l])=>
+          `<button class="${f.size===k?'active':''}" onclick="talentFilter.size='${k}';render()">${l}</button>`).join('')}
+      </div>
+    </div>
+    <div class="talent-grid" style="--card-w:${cardW}px">${cards ||
+      '<div class="muted">条件に一致する人がいません。</div>'}</div>
+  </div>`;
+}
+
+/* ---------------- スキル管理 ---------------- */
+function skillTargets(){
+  return scopeEmps(data.employees).filter(e=>e.status!=='退職' && !isFamilyRec(e))
+    .sort((a,b)=>(a.empNo||'zzz').localeCompare(b.empNo||'zzz'));
+}
+function viewSkills(){
+  if(myRank()<1) return `<div class="panel"><h2>閲覧権限がありません</h2></div>`;
+  const subs = [['map','スキルマップ'],['input','個人スキル'],['summary','組織サマリー']];
+  if(canEdit()) subs.push(['master','スキルマスタ']);
+  if(!subs.some(s=>s[0]===skillSub)) skillSub='map';
+  const nav = `<div class="toolbar">
+    <div class="viewseg">
+      ${subs.map(([k,l])=>`<button class="${skillSub===k?'active':''}" onclick="skillSub='${k}';render()">${l}</button>`).join('')}
+    </div>
+    <div class="spacer"></div>
+    <span class="muted">レベル：${Object.entries(SKILL_LEVELS).filter(([k])=>k>0).map(([k,v])=>`${k}=${v}`).join('　')}</span>
+  </div>`;
+  let body='';
+  if(skillSub==='map') body = skillMapHtml();
+  else if(skillSub==='input') body = skillInputHtml();
+  else if(skillSub==='summary') body = skillSummaryHtml();
+  else if(skillSub==='master') body = skillMasterHtml();
+  return `<div class="panel">
+    <h2>スキル管理 <span class="en">Skill Map — 誰が・何を・どのレベルでできるかを見える化</span></h2>
+    ${nav}${body}
+  </div>`;
+}
+function skillMapHtml(){
+  const emps = skillTargets();
+  if(!data.skillDefs.length) return '<div class="muted">スキルマスタが空です。「スキルマスタ」タブから追加してください。</div>';
+  const cats = skillCats();
+  const catRow = cats.map(c=>{
+    const n = data.skillDefs.filter(s=>s.category===c).length;
+    return `<th class="cat" colspan="${n}">${esc(c)}</th>`; }).join('');
+  const skillRow = data.skillDefs.map(s=>
+    `<th title="${esc(s.description||'')}" style="writing-mode:vertical-rl;text-orientation:mixed;padding:8px 3px;font-weight:600">${esc(s.name)}</th>`).join('');
+  const rows = emps.map(e=>{
+    const cells = data.skillDefs.map(s=>{
+      const lv = skillLevelOf(e.id, s.id);
+      return `<td><span class="sklv lv${lv}" title="${esc(s.name)}：${SKILL_LEVELS[lv]}">${lv||'—'}</span></td>`;
+    }).join('');
+    return `<tr>
+      <td class="namecell"><a href="javascript:void(0)" onclick="skillSub='input';skillEmpId='${e.id}';render()" style="display:flex;align-items:center;gap:6px;text-decoration:none;color:inherit">
+        ${avatarOf(e,'sm')}<b>${esc(e.nameKanji||e.nameRoma)}</b></a></td>${cells}</tr>`;
+  }).join('');
+  const avgCells = data.skillDefs.map(s=>{
+    const withLv = emps.map(e=>skillLevelOf(e.id,s.id)).filter(v=>v>0);
+    const avg = withLv.length? (withLv.reduce((a,b)=>a+b,0)/withLv.length) : 0;
+    return `<td class="muted" style="font-weight:700">${avg?avg.toFixed(1):'—'}</td>`; }).join('');
+  return `<div class="tablewrap"><table class="skmap">
+    <tr><th class="namecell" style="background:#eef2f7"></th>${catRow}</tr>
+    <tr><th class="namecell" style="background:#eef2f7">氏名</th>${skillRow}</tr>
+    ${rows}
+    <tr><td class="namecell muted" style="font-weight:700">平均（評価済のみ）</td>${avgCells}</tr>
+  </table></div>
+  <p class="muted" style="margin-top:8px">氏名をクリックすると個人スキルの入力画面に移動します。</p>`;
+}
+function skillInputHtml(){
+  const emps = skillTargets();
+  if(!emps.length) return '<div class="muted">対象者がいません。</div>';
+  if(!skillEmpId || !emps.some(e=>e.id===skillEmpId)) skillEmpId = emps[0].id;
+  const e = empById(skillEmpId);
+  const editable = canEdit();
+  const cats = skillCats();
+  const rows = cats.map(cat=>{
+    const items = data.skillDefs.filter(s=>s.category===cat).map(s=>{
+      const lv = skillLevelOf(skillEmpId, s.id);
+      const seg = [0,1,2,3,4,5].map(n=>
+        `<button class="${lv===n?'on':''}" ${editable?`onclick="setSkillLevel('${skillEmpId}','${s.id}',${n})"`:'disabled'}
+          title="${SKILL_LEVELS[n]}">${n||'—'}</button>`).join('');
+      return `<div class="sk-input-row">
+        <span class="skname">${esc(s.name)}${s.description?`<br><span class="muted">${esc(s.description)}</span>`:''}</span>
+        <span class="lvseg">${seg}</span>
+      </div>`;
+    }).join('');
+    return `<div class="section-title">${esc(cat)}</div>${items}`;
+  }).join('');
+  return `
+  <div class="toolbar">
+    <select onchange="skillEmpId=this.value;render()">
+      ${emps.map(x=>`<option value="${x.id}" ${x.id===skillEmpId?'selected':''}>${esc(x.nameKanji||x.nameRoma)}${x.empNo?`（${esc(x.empNo)}）`:''}</option>`).join('')}
+    </select>
+    ${editable?'':'<span class="muted">閲覧のみ（編集は管理者権限が必要です）</span>'}
+  </div>
+  <div class="grid" style="grid-template-columns:1fr 300px;align-items:start">
+    <div>${rows}</div>
+    <div class="panel" style="margin:0">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">${avatarOf(e,'')}
+        <div><b>${esc(e.nameKanji||e.nameRoma)}</b><br><span class="muted">${esc(e.department||'部署未設定')}</span></div></div>
+      ${empHasSkills(skillEmpId)? `<div class="radar-wrap">${empRadar(skillEmpId, 260, 10)}</div>`
+        : '<div class="muted">レベルを入力するとレーダーチャートが表示されます。</div>'}
+    </div>
+  </div>`;
+}
+function skillSummaryHtml(){
+  const emps = skillTargets();
+  const cats = skillCats();
+  const catPanels = cats.map(cat=>{
+    const defs = data.skillDefs.filter(s=>s.category===cat);
+    const rows = defs.map(s=>{
+      const lvs = emps.map(e=>({e, lv:skillLevelOf(e.id,s.id)})).filter(x=>x.lv>0);
+      const avg = lvs.length? lvs.reduce((a,b)=>a+b.lv,0)/lvs.length : 0;
+      const solo = lvs.filter(x=>x.lv>=3);
+      const top = lvs.sort((a,b)=>b.lv-a.lv).slice(0,3)
+        .map(x=>`${esc(x.e.nameKanji||x.e.nameRoma)}(${x.lv})`).join('、');
+      const risk = !solo.length;
+      return `<tr ${risk?'style="background:var(--danger-soft)"':''}>
+        <td>${esc(s.name)}</td>
+        <td class="center">${avg?avg.toFixed(1):'—'}</td>
+        <td class="center">${solo.length}名 ${risk?'<span class="badge b-red">担い手不足</span>':''}</td>
+        <td class="muted">${top||'—'}</td></tr>`;
+    }).join('');
+    return `<div class="section-title">${esc(cat)}</div>
+      <div class="tablewrap"><table>
+      <tr><th>スキル</th><th class="center">平均Lv</th><th class="center">独り立ち（Lv3+）</th><th>上位保有者</th></tr>
+      ${rows}</table></div>`;
+  }).join('');
+  const rated = emps.filter(e=>empHasSkills(e.id)).length;
+  return `
+  <div class="grid cols4" style="margin-bottom:14px">
+    <div class="stat"><div class="num">${emps.length}</div><div class="lbl">対象者</div></div>
+    <div class="stat"><div class="num">${rated}</div><div class="lbl">スキル評価済み</div></div>
+    <div class="stat"><div class="num">${data.skillDefs.length}</div><div class="lbl">スキル項目</div></div>
+    <div class="stat"><div class="num">${cats.length}</div><div class="lbl">カテゴリ</div></div>
+  </div>
+  ${catPanels}
+  <p class="muted" style="margin-top:8px">赤い行＝Lv3以上（一人で実行できる）の担い手がいないスキル。育成・採用の優先候補です。</p>`;
+}
+function skillMasterHtml(){
+  if(!canEdit()) return '<div class="muted">スキルマスタの編集には管理者権限が必要です。</div>';
+  const cats = skillCats();
+  const rows = data.skillDefs.map(s=>`
+    <tr><td>${esc(s.category)}</td><td><b>${esc(s.name)}</b></td>
+    <td class="muted">${esc(s.description||'')}</td><td>${s.sort_order}</td>
+    <td><button class="btn small danger" onclick="delSkillDef('${s.id}')">削除</button></td></tr>`).join('');
+  return `
+  <div class="toolbar">
+    <input id="skCat" placeholder="カテゴリ" list="skCatList" style="width:160px">
+    <datalist id="skCatList">${cats.map(c=>`<option value="${esc(c)}">`).join('')}</datalist>
+    <input id="skName" placeholder="スキル名" style="width:180px">
+    <input id="skDesc" placeholder="説明（任意）" style="width:220px">
+    <button class="btn" onclick="addSkillDef()">＋ 追加</button>
+    <div class="spacer"></div>
+    <button class="btn ghost" onclick="resetSkillDefs()">初期テンプレートに戻す</button>
+  </div>
+  <div class="tablewrap"><table>
+    <tr><th>カテゴリ</th><th>スキル名</th><th>説明</th><th>順序</th><th></th></tr>${rows}
+  </table></div>
+  <p class="muted" style="margin-top:8px">スキルを削除すると、そのスキルの全社員のレベル記録も削除されます。</p>`;
+}
+async function setSkillLevel(empId, skillId, level){
+  if(!canEdit()){ toast(denyMsg(), true); return; }
+  await q(sb.from('employee_skills').upsert(
+    {employee_id:empId, skill_id:skillId, level, updated_at:new Date().toISOString()}));
+  if(!data.empSkills[empId]) data.empSkills[empId] = {};
+  data.empSkills[empId][skillId] = {level, note:(data.empSkills[empId][skillId]||{}).note||''};
+  render();
+}
+async function addSkillDef(){
+  const cat = document.getElementById('skCat').value.trim();
+  const name = document.getElementById('skName').value.trim();
+  const desc = document.getElementById('skDesc').value.trim();
+  if(!cat || !name){ toast('カテゴリとスキル名を入力してください', true); return; }
+  const maxOrder = Math.max(0, ...data.skillDefs.map(s=>s.sort_order||0));
+  const def = {id:'sk-'+uid().slice(0,8), category:cat, name, description:desc, sort_order:maxOrder+1};
+  await q(sb.from('skill_defs').insert(def));
+  data.skillDefs.push(def);
+  render(); toast('スキルを追加しました');
+}
+async function delSkillDef(id){
+  const s = data.skillDefs.find(x=>x.id===id);
+  if(!confirm(`スキル「${s?s.name:''}」を削除しますか？全社員のレベル記録も消えます。`)) return;
+  await q(sb.from('skill_defs').delete().eq('id', id));
+  data.skillDefs = data.skillDefs.filter(x=>x.id!==id);
+  Object.values(data.empSkills).forEach(m=>{ delete m[id]; });
+  render(); toast('削除しました');
+}
+async function resetSkillDefs(){
+  if(!confirm('スキルマスタを初期テンプレート（23項目）に戻しますか？\n追加した独自スキルと、そのレベル記録は削除されます。')) return;
+  await q(sb.from('skill_defs').delete().neq('id',''));
+  await q(sb.from('skill_defs').insert(DEFAULT_SKILL_DEFS));
+  data.skillDefs = JSON.parse(JSON.stringify(DEFAULT_SKILL_DEFS));
+  await loadAll(); render(); toast('初期テンプレートに戻しました');
 }
 
 /* ---------------- dashboard ---------------- */
@@ -778,6 +1184,29 @@ function viewEmpDetail(id){
       </div>
     </div>
   </div>
+
+  ${!isFamilyRec(e)? `
+  <div class="panel">
+    <h2>🧭 スキル <span class="en">Skill Radar — カテゴリ別平均レベル（5段階）</span></h2>
+    ${empHasSkills(e.id)? `
+    <div class="grid" style="grid-template-columns:280px 1fr;align-items:start">
+      <div class="radar-wrap">${empRadar(e.id, 250, 10)}</div>
+      <div>
+        ${skillCats().map(cat=>{
+          const items = data.skillDefs.filter(s=>s.category===cat)
+            .map(s=>({s, lv:skillLevelOf(e.id, s.id)})).filter(x=>x.lv>0);
+          if(!items.length) return '';
+          return `<div class="section-title">${esc(cat)}</div>
+            <div class="tag-row" style="margin-bottom:6px">
+            ${items.map(x=>`<span class="badge ${x.lv>=4?'b-green':x.lv>=3?'b-blue':'b-gray'}"
+              title="${SKILL_LEVELS[x.lv]}">${esc(x.s.name)} Lv${x.lv}</span>`).join('')}</div>`;
+        }).join('')}
+        ${navAllowed('skills')?`<button class="btn secondary small" style="margin-top:6px"
+          onclick="view='skills';skillSub='input';skillEmpId='${e.id}';render()">スキル管理で開く</button>`:''}
+      </div>
+    </div>`
+    : `<p class="muted">スキル未評価です。${canEdit()?`<a href="javascript:void(0)" onclick="view='skills';skillSub='input';skillEmpId='${e.id}';render()">スキル管理タブから入力</a>できます。`:''}</p>`}
+  </div>`:''}
 
   <div class="panel">
     <h2>📄 書類チェックリスト <span class="en">${p.done}/${p.total} 完了（${p.pct}%）</span></h2>
@@ -1025,6 +1454,7 @@ function viewEvals(){
       ${canEdit()? `<button class="btn secondary" onclick="bulkCreateEvals()">在籍者に一括作成</button>
       <button class="btn" onclick="openEvalForm()">＋ 評価シート作成</button>` : '<span class="muted">自分の評価のみ閲覧できます</span>'}
     </div>
+    ${myRank()>=2 && list.length? evalProgressHtml(list) : ''}
     <div class="tablewrap"><table>
       <tr><th>期間</th><th>対象者</th><th>役割区分</th><th>評価者</th><th>A成果</th><th>B行動</th><th>C情意</th><th>総合点</th><th>ランク</th><th>進捗</th></tr>
       ${list.map(v=>{
@@ -1045,6 +1475,44 @@ function viewEvals(){
       }).join('')||'<tr><td colspan="10" class="muted">評価シートがありません。「＋評価シート作成」または「在籍者に一括作成」から始めてください。</td></tr>'}
     </table></div>
     <p class="muted" style="margin-top:8px">ウェイト：${Object.entries(EVAL_ROLES).map(([k,w])=>`${k} ${w.a}/${w.b}/${w.c}`).join('　')}／ランク：S≥4.5 A≥3.7 B≥2.8 C≥2.0</p>
+  </div>`;
+}
+/* カオナビ型：評価の進捗管理＋ランク分布（管理者以上） */
+function evalProgressHtml(list){
+  const total = list.length;
+  const stCounts = EVAL_STATUSES.map(st=>({st, n:list.filter(v=>v.status===st).length}));
+  const done = list.filter(v=>v.status==='確定').length;
+  const pct = total? Math.round(done*100/total) : 0;
+  const ranks = {};
+  list.forEach(v=>{ const c=evalCalc(v); if(c.rank) ranks[c.rank]=(ranks[c.rank]||0)+1; });
+  const maxR = Math.max(1, ...GRADES.map(g=>ranks[g]||0));
+  const RANK_COLORS = {S:'#1e7e4e', A:'#4d9e6f', B:'#1a56a8', C:'#b7791f', D:'#c0392b'};
+  const pending = list.filter(v=>v.status!=='確定');
+  return `
+  <div class="grid" style="grid-template-columns:1fr 1fr;margin-bottom:14px;align-items:start">
+    <div class="fieldset" style="margin:0">
+      <legend>進捗管理${evalPeriodFilter?`（${esc(evalPeriodFilter)}）`:'（全期間）'}</legend>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+        <div class="progress" style="flex:1"><div style="width:${pct}%"></div></div>
+        <b>${done}/${total} 確定（${pct}%）</b>
+      </div>
+      <div class="tag-row">
+        ${stCounts.map(x=>`<span class="badge ${x.st==='確定'?'b-green':x.n?'b-yellow':'b-gray'}">${x.st} ${x.n}</span>`).join('')}
+      </div>
+      ${pending.length? `<div class="muted" style="margin-top:8px">未確定：${pending.slice(0,8).map(v=>esc(empName(v.empId))).join('、')}${pending.length>8?` 他${pending.length-8}名`:''}</div>`:''}
+    </div>
+    <div class="fieldset" style="margin:0">
+      <legend>ランク分布（自動計算）</legend>
+      ${GRADES.map(g=>{ const n=ranks[g]||0; return `
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;font-size:12px">
+          <b style="width:16px">${g}</b>
+          <div style="flex:1;background:#eef2f7;border-radius:5px;height:16px;overflow:hidden">
+            <div style="width:${n*100/maxR}%;height:100%;background:${RANK_COLORS[g]}"></div>
+          </div>
+          <span style="width:34px;text-align:right">${n}名</span>
+        </div>`; }).join('')}
+      <div class="muted" style="margin-top:4px">点数入力済みのシートのみ集計されます。</div>
+    </div>
   </div>`;
 }
 async function bulkCreateEvals(){
@@ -1593,7 +2061,7 @@ async function resetTpl(){
 }
 async function wipeAll(){
   if(!canAdmin()){ toast('全データ削除は「全体管理」権限のみ実行できます', true); return; }
-  if(!confirm('本当に全データ（従業員・評価・KPI・資産・書類記録）を削除しますか？この操作は元に戻せません。')) return;
+  if(!confirm('本当に全データ（従業員・評価・KPI・資産・書類記録・スキル記録）を削除しますか？この操作は元に戻せません。')) return;
   if(!confirm('最終確認：バックアップは保存済みですか？削除を実行します。')) return;
   await q(sb.from('assets').delete().neq('id','00000000-0000-0000-0000-000000000000'));
   await q(sb.from('kpis').delete().neq('id','00000000-0000-0000-0000-000000000000'));
@@ -1612,13 +2080,15 @@ function download(filename, content, mime){
 }
 function exportJson(){
   const out = {
-    version:2, exportedAt:new Date().toISOString(),
+    version:3, exportedAt:new Date().toISOString(),
     departments:data.departments,
     docTemplates:data.docTemplates,
     employees:data.employees,
     evaluations:data.evaluations,
     kpis:data.kpis,
-    assets:data.assets
+    assets:data.assets,
+    skillDefs:data.skillDefs,
+    empSkills:data.empSkills
   };
   download(`KMT-HR-backup-${today()}.json`, JSON.stringify(out, null, 1), 'application/json');
 }
@@ -1671,6 +2141,18 @@ async function importJson(){
     // assets
     const assets = (d.assets||[]).map(a=>Object.assign({}, a, {id:mapId(a.id), assignedTo:a.assignedTo?mapId(a.assignedTo):''}));
     if(assets.length) await q(sb.from('assets').insert(assets.map(assetToDb)));
+    // skills（v3以降のバックアップのみ。無ければ既定テンプレートを維持）
+    if(Array.isArray(d.skillDefs) && d.skillDefs.length){
+      await q(sb.from('skill_defs').delete().neq('id',''));
+      await q(sb.from('skill_defs').insert(d.skillDefs));
+      const skRows = [];
+      Object.entries(d.empSkills||{}).forEach(([empId, m])=>{
+        Object.entries(m).forEach(([skillId, v])=>{
+          if(v.level>0) skRows.push({employee_id:mapId(empId), skill_id:skillId, level:v.level, note:v.note||''});
+        });
+      });
+      if(skRows.length) await q(sb.from('employee_skills').insert(skRows));
+    }
     await loadAll(); render(); toast('取込が完了しました');
   }catch(e){
     toast('取込エラー：'+e.message, true);

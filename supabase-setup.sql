@@ -133,6 +133,24 @@ create table if not exists public.assets (
   notes         text default ''
 );
 
+-- スキル管理（カオナビ型）：スキルマスタ＋社員別レベル
+create table if not exists public.skill_defs (
+  id          text primary key,
+  category    text not null,
+  name        text not null,
+  description text default '',
+  sort_order  int default 0
+);
+
+create table if not exists public.employee_skills (
+  employee_id uuid not null references public.employees(id) on delete cascade,
+  skill_id    text not null references public.skill_defs(id) on delete cascade,
+  level       int not null default 0 check (level between 0 and 5),
+  note        text default '',
+  updated_at  timestamptz not null default now(),
+  primary key (employee_id, skill_id)
+);
+
 grant usage on schema public to anon, authenticated;
 grant select, insert, update, delete on all tables in schema public to authenticated;
 
@@ -278,6 +296,59 @@ begin
     execute format('create policy kmt_%s_delete on public.%I for delete to authenticated using (public.my_rank() >= 2)', t, t);
   end loop;
 end $$;
+
+-- skill_defs：閲覧は社員以上／変更は管理者以上
+alter table public.skill_defs enable row level security;
+drop policy if exists kmt_sd_select on public.skill_defs;
+drop policy if exists kmt_sd_insert on public.skill_defs;
+drop policy if exists kmt_sd_update on public.skill_defs;
+drop policy if exists kmt_sd_delete on public.skill_defs;
+create policy kmt_sd_select on public.skill_defs for select to authenticated using (public.my_rank() >= 1);
+create policy kmt_sd_insert on public.skill_defs for insert to authenticated with check (public.my_rank() >= 2);
+create policy kmt_sd_update on public.skill_defs for update to authenticated using (public.my_rank() >= 2) with check (public.my_rank() >= 2);
+create policy kmt_sd_delete on public.skill_defs for delete to authenticated using (public.my_rank() >= 2);
+
+-- employee_skills：社員は自分の行のみ閲覧／変更は管理者以上
+alter table public.employee_skills enable row level security;
+drop policy if exists kmt_es_select on public.employee_skills;
+drop policy if exists kmt_es_insert on public.employee_skills;
+drop policy if exists kmt_es_update on public.employee_skills;
+drop policy if exists kmt_es_delete on public.employee_skills;
+create policy kmt_es_select on public.employee_skills for select to authenticated
+  using (public.my_rank() >= 2
+         or (public.my_rank() = 1 and employee_id in (select id from public.employees)));
+create policy kmt_es_insert on public.employee_skills for insert to authenticated with check (public.my_rank() >= 2);
+create policy kmt_es_update on public.employee_skills for update to authenticated using (public.my_rank() >= 2) with check (public.my_rank() >= 2);
+create policy kmt_es_delete on public.employee_skills for delete to authenticated using (public.my_rank() >= 2);
+
+-- 4b) スキルの初期テンプレート（空のときだけ投入・再実行安全） --------
+insert into public.skill_defs (id, category, name, description, sort_order)
+select * from (values
+ ('s01','語学・コミュニケーション','日本語（ビジネス）','会議・文書・電話応対レベル',1),
+ ('s02','語学・コミュニケーション','英語','業務コミュニケーションレベル',2),
+ ('s03','語学・コミュニケーション','多文化コミュニケーション','国籍・文化の異なる相手との調整力',3),
+ ('s10','紹介営業','新規開拓・アポ獲得','',10),
+ ('s11','紹介営業','求人ヒアリング・提案','',11),
+ ('s12','紹介営業','クロージング・条件交渉','',12),
+ ('s13','紹介営業','顧客関係維持','既存顧客フォロー・リピート獲得',13),
+ ('s20','支援業務','入管手続き・申請書類','在留資格の申請・更新・届出',20),
+ ('s21','支援業務','生活オリエンテーション','住居・銀行・行政手続きの案内',21),
+ ('s22','支援業務','定期面談・相談対応','',22),
+ ('s23','支援業務','行政・関係機関連携','入管・ハローワーク・支援団体との調整',23),
+ ('s30','マーケティング','SNS運用・発信','',30),
+ ('s31','マーケティング','コンテンツ制作','画像・動画・記事の制作',31),
+ ('s32','マーケティング','採用マーケティング','求職者集客・母集団形成',32),
+ ('s33','マーケティング','データ分析','数値管理・レポート作成',33),
+ ('s40','バックオフィス','労務・勤怠管理','',40),
+ ('s41','バックオフィス','経理・請求業務','',41),
+ ('s42','バックオフィス','契約書・文書管理','',42),
+ ('s43','バックオフィス','PC・ITツール活用','Excel・クラウドツール等',43),
+ ('s50','共通・マネジメント','問題解決・改善提案','',50),
+ ('s51','共通・マネジメント','後輩指導・OJT','',51),
+ ('s52','共通・マネジメント','チームマネジメント','',52),
+ ('s53','共通・マネジメント','コンプライアンス理解','個人情報・入管法・労働法の理解',53)
+) as v(id, category, name, description, sort_order)
+where not exists (select 1 from public.skill_defs);
 
 -- 5) 最初の全体管理者 -----------------------------------------------
 --    ここで登録するのはメールアドレスと権限だけです。
