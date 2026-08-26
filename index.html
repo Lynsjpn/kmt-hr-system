@@ -367,7 +367,16 @@ const EVAL_ROLES = {
   'マーケティング':{a:50,b:35,c:15},
   'バックオフィス':{a:40,b:40,c:20},
 };
-const DEPT_ROLE = {'支援部':'支援担当','紹介事業部':'紹介営業','海外事業部':'マーケティング','管理部':'バックオフィス'};
+/* 部署 → 評価の役割区分。部署を増やしたらここにも追加する（未設定は「支援担当」扱い） */
+const DEPT_ROLE = {
+  '営業部':'紹介営業',
+  'グローバルチーム':'支援担当',
+  '総務部（人事労務）':'バックオフィス',
+  '総務部（経理）':'バックオフィス',
+};
+/* 国籍別チーム（月報「GLT月報」の集計単位。KPIの「チーム」区分で使う） */
+const NATION_TEAMS = ['インドネシア','ベトナム','タイ','カンボジア','ミャンマー'];
+const KPI_SCOPES = ['全社','部署','チーム','個人'];
 const EVAL_STATUSES = ['目標設定','自己評価中','上長評価中','面談待ち','確定'];
 const RANK_TABLE = [
   [4.5,'S',1.3,'8,000〜10,000円'],
@@ -538,8 +547,8 @@ function evalToDb(v){ return {id:v.id, employee_id:v.empId, period:v.period||'',
   role:v.role||'紹介営業', kpis:v.kpis||[], comps:v.comps||[], atts:v.atts||[],
   sd_reason:v.sdReason||'', mid_review:v.midReview||'', final_meeting:v.finalMeeting||'', emp_comment:v.empComment||'',
   goals:v.goals||[], self_score:v.selfScore||'', mgr_score:v.mgrScore||'', final_grade:v.finalGrade||'', comment:v.comment||''}; }
-function dbToKpi(r){ return {id:r.id, period:r.period, scope:r.scope, empId:r.employee_id||'', dept:r.dept, name:r.name, unit:r.unit, target:r.target, records:r.records||[], notes:r.notes}; }
-function kpiToDb(k){ return {id:k.id, period:k.period||'', scope:k.scope, employee_id:dOrNull(k.empId), dept:k.dept||'', name:k.name, unit:k.unit||'', target:k.target||'', records:k.records||[], notes:k.notes||''}; }
+function dbToKpi(r){ return {id:r.id, period:r.period, scope:r.scope, empId:r.employee_id||'', dept:r.dept, name:r.name, unit:r.unit, target:r.target, records:r.records||[], notes:r.notes, lowerBetter:!!r.lower_better}; }
+function kpiToDb(k){ return {id:k.id, period:k.period||'', scope:k.scope, employee_id:dOrNull(k.empId), dept:k.dept||'', name:k.name, unit:k.unit||'', target:k.target||'', records:k.records||[], notes:k.notes||'', lower_better:!!k.lowerBetter}; }
 function dbToAsset(r){ return {id:r.id, assetNo:r.asset_no, category:r.category, name:r.name, serial:r.serial, purchaseDate:r.purchase_date||'', price:r.price, status:r.status, assignedTo:r.assigned_to||'', lendDate:r.lend_date||'', returnDate:r.return_date||'', notes:r.notes}; }
 function assetToDb(a){ return {id:a.id, asset_no:a.assetNo||'', category:a.category, name:a.name, serial:a.serial||'', purchase_date:dOrNull(a.purchaseDate), price:a.price||'', status:a.status, assigned_to:dOrNull(a.assignedTo), lend_date:dOrNull(a.lendDate), return_date:dOrNull(a.returnDate), notes:a.notes||''}; }
 
@@ -2224,10 +2233,13 @@ async function deleteEval(id){
 }
 
 /* ---------------- KPI ---------------- */
+/* 達成率。「少ないほど良い」KPI（退職者数など）は 目標/実績 で計算するため、
+   実績が目標を下回るほど100%を超える。 */
 function kpiRate(k){
   const t = parseFloat(k.target);
   const a = (k.records||[]).reduce((s,r)=>s+(parseFloat(r.actual)||0),0);
   if(!t) return null;
+  if(k.lowerBetter) return a<=0 ? 200 : Math.round(t/a*100);
   return Math.round(a/t*100);
 }
 function kpiActual(k){ return (k.records||[]).reduce((s,r)=>s+(parseFloat(r.actual)||0),0); }
@@ -2247,25 +2259,38 @@ function viewKpi(){
       <div class="spacer"></div>
       ${canEdit()? '<button class="btn" onclick="openKpiForm()">＋ KPI登録</button>' : '<span class="muted">閲覧のみの権限です</span>'}
     </div>
-    <div class="tablewrap"><table>
-      <tr><th>期間</th><th>区分</th><th>担当</th><th>KPI名</th><th>目標</th><th>実績累計</th><th>達成率</th></tr>
-      ${list.map(k=>{
-        const rate = kpiRate(k);
-        return `<tr class="clickable" onclick="openKpiForm('${k.id}')">
-          <td>${esc(k.period)}</td>
-          <td><span class="badge ${k.scope==='全社'?'b-blue':k.scope==='部署'?'b-yellow':'b-gray'}">${esc(k.scope)}</span></td>
-          <td>${k.scope==='個人'? esc(empName(k.empId)) : esc(k.dept||'—')}</td>
-          <td><b>${esc(k.name)}</b></td>
-          <td>${esc(k.target)} ${esc(k.unit)}</td>
-          <td>${kpiActual(k)} ${esc(k.unit)}</td>
-          <td>${rate===null?'—':`<div style="display:flex;align-items:center;gap:8px"><div class="progress" style="flex:1;min-width:60px"><div style="width:${Math.min(rate,100)}%;background:${rate>=100?'var(--ok)':rate>=70?'var(--accent)':'var(--warn)'}"></div></div><b>${rate}%</b></div>`}</td>
-        </tr>`;
-      }).join('')||'<tr><td colspan="7" class="muted">KPIが登録されていません。例：特定技能 支援対象者数、紹介成約数、面談実施数、定期報告提出率…</td></tr>'}
-    </table></div>
+    ${KPI_SCOPES.map(sc=>{
+      const rows = list.filter(k=>k.scope===sc);
+      if(!rows.length) return '';
+      /* 担当（部署・チーム・個人）ごとにまとめて見せる */
+      const groups = [...new Set(rows.map(k=> sc==='個人'? empName(k.empId) : (k.dept||'—')))];
+      return `<div class="section-title">${sc==='全社'?'🏢 全体目標':sc==='部署'?'🏬 部署目標':sc==='チーム'?'🌏 国籍チーム目標':'👤 個人目標'}
+        <span class="en">${rows.length}件</span></div>
+      <div class="tablewrap"><table>
+        <tr><th>${sc==='全社'?'期間':'担当'}</th><th>KPI名</th><th>目標</th><th>実績累計</th><th>達成率</th></tr>
+        ${groups.map(g=>{
+          const gr = rows.filter(k=> (sc==='個人'? empName(k.empId) : (k.dept||'—')) === g);
+          return gr.map((k,i)=>{
+            const rate = kpiRate(k);
+            const good = rate!==null && rate>=100, warn = rate!==null && rate>=70;
+            return `<tr class="clickable" onclick="openKpiForm('${k.id}')">
+              <td>${i===0? (sc==='全社'? esc(k.period) : `<b>${esc(g)}</b>`) : ''}</td>
+              <td>${esc(k.name)}${k.lowerBetter?' <span class="badge b-gray" title="少ないほど良いKPI">↓良</span>':''}
+                ${k.notes?`<br><span class="muted">${esc(k.notes)}</span>`:''}</td>
+              <td>${k.lowerBetter?'≤ ':''}${esc(k.target)} ${esc(k.unit)}</td>
+              <td>${kpiActual(k)} ${esc(k.unit)}</td>
+              <td>${rate===null?'—':`<div style="display:flex;align-items:center;gap:8px">
+                <div class="progress" style="flex:1;min-width:60px"><div style="width:${Math.min(rate,100)}%;background:${good?'var(--ok)':warn?'var(--accent)':'var(--warn)'}"></div></div>
+                <b style="color:${good?'var(--ok)':warn?'var(--text)':'var(--danger)'}">${rate}%</b></div>`}</td>
+            </tr>`;
+          }).join('');
+        }).join('')}
+      </table></div>`;
+    }).join('') || '<div class="muted">KPIが登録されていません。例：特定技能 支援対象者数、紹介成約数、面談実施数、定期報告提出率…</div>'}
   </div>`;
 }
 function openKpiForm(id){
-  const k = id? data.kpis.find(x=>x.id===id) : {id:uid(), period:'', scope:'全社', empId:'', dept:'', name:'', unit:'件', target:'', records:[], notes:''};
+  const k = id? data.kpis.find(x=>x.id===id) : {id:uid(), period:'2026年度', scope:'全社', empId:'', dept:'', name:'', unit:'名', target:'', records:[], notes:'', lowerBetter:false};
   const isNew = !id;
   window._kpiDraft = JSON.parse(JSON.stringify(k));
   renderKpiModal(isNew);
@@ -2276,12 +2301,17 @@ function renderKpiModal(isNew){
   <h3>${isNew?'KPI登録':'KPI編集'}</h3>
   <div class="formgrid">
     <div><label>期間（例：2026年度 / 2026Q3）</label><input id="kp_period" value="${esc(k.period)}"></div>
-    <div><label>区分</label><select id="kp_scope" onchange="_kpiDraft.scope=this.value;renderKpiModal(${isNew})">${['全社','部署','個人'].map(s=>`<option ${k.scope===s?'selected':''}>${s}</option>`).join('')}</select></div>
+    <div><label>区分</label><select id="kp_scope" onchange="_kpiDraft.scope=this.value;renderKpiModal(${isNew})">${KPI_SCOPES.map(s=>`<option ${k.scope===s?'selected':''}>${s}</option>`).join('')}</select></div>
     ${k.scope==='個人'?`<div><label>担当者</label><select id="kp_emp">${data.employees.filter(e=>e.status!=='退職').map(e=>`<option value="${e.id}" ${k.empId===e.id?'selected':''}>${esc(e.nameKanji||e.nameRoma)}</option>`).join('')}</select></div>`:''}
     ${k.scope==='部署'?`<div><label>部署</label><select id="kp_dept">${data.departments.map(d=>`<option ${k.dept===d?'selected':''}>${esc(d)}</option>`).join('')}</select></div>`:''}
+    ${k.scope==='チーム'?`<div><label>国籍チーム</label><select id="kp_dept">${NATION_TEAMS.map(d=>`<option ${k.dept===d?'selected':''}>${esc(d)}</option>`).join('')}</select></div>`:''}
     <div><label>KPI名</label><input id="kp_name" value="${esc(k.name)}" placeholder="例：特定技能 支援対象者数"></div>
     <div><label>目標値</label><input type="number" id="kp_target" value="${esc(k.target)}"></div>
     <div><label>単位</label><input id="kp_unit" value="${esc(k.unit)}" placeholder="件 / 名 / % / 円"></div>
+    <div><label>方向</label><select id="kp_lower" onchange="_kpiDraft.lowerBetter=(this.value==='1')">
+      <option value="0" ${k.lowerBetter?'':'selected'}>多いほど良い（目標以上をめざす）</option>
+      <option value="1" ${k.lowerBetter?'selected':''}>少ないほど良い（退職者数など・目標以下をめざす）</option>
+    </select></div>
   </div>
   <div class="fieldset"><legend>実績記録</legend>
     <table><tr><th>年月</th><th>実績</th><th>メモ</th><th></th></tr>
@@ -2307,10 +2337,11 @@ async function saveKpi(isNew){
   k.period = document.getElementById('kp_period').value.trim();
   k.scope = document.getElementById('kp_scope').value;
   k.empId = k.scope==='個人'? document.getElementById('kp_emp').value : '';
-  k.dept = k.scope==='部署'? document.getElementById('kp_dept').value : '';
+  k.dept = (k.scope==='部署'||k.scope==='チーム')? document.getElementById('kp_dept').value : '';
   k.name = document.getElementById('kp_name').value.trim();
   k.target = document.getElementById('kp_target').value;
   k.unit = document.getElementById('kp_unit').value.trim();
+  k.lowerBetter = document.getElementById('kp_lower').value === '1';
   k.notes = document.getElementById('kp_notes').value;
   if(!k.name){ alert('KPI名を入力してください'); return; }
   await q(sb.from('kpis').upsert(kpiToDb(k)));

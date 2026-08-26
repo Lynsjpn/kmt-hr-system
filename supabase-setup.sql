@@ -105,10 +105,12 @@ create table if not exists public.evaluations (
   comment       text default ''
 );
 
+-- 退職者数のように「少ないほど良い」KPIを正しく評価するための区分
+-- （達成率を 目標÷実績 で計算する）
 create table if not exists public.kpis (
   id          uuid primary key default gen_random_uuid(),
   period      text default '',
-  scope       text default '全社',
+  scope       text default '全社',   -- 全社 / 部署 / チーム（国籍別）/ 個人
   employee_id uuid references public.employees(id) on delete set null,
   dept        text default '',
   name        text default '',
@@ -117,6 +119,7 @@ create table if not exists public.kpis (
   records     jsonb default '[]'::jsonb,
   notes       text default ''
 );
+alter table public.kpis add column if not exists lower_better boolean not null default false;
 
 create table if not exists public.assets (
   id            uuid primary key default gen_random_uuid(),
