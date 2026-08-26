@@ -8,15 +8,15 @@
 <style>
 :root{
   /* ピンク基調（薄ピンク×淡ピンク） */
-  --bg:#fdf6f9; --panel:#ffffff; --border:#f3d7e3; --text:#3d2530; --sub:#9b7a89;
-  --accent:#d6336c; --accent-soft:#fce7f0; --danger:#c0392b; --danger-soft:#fdecea;
+  --bg:#fdf7f4; --panel:#ffffff; --border:#f0dcd3; --text:#3a2c26; --sub:#82675c;
+  --accent:#b8492e; --accent-soft:#fdeee9; --danger:#c0392b; --danger-soft:#fdecea;
   --warn:#b7791f; --warn-soft:#fdf3e3; --ok:#1e7e4e; --ok-soft:#e6f4ec;
   --radius:10px;
   --sb-w:250px;            /* サイドバー幅 */
-  --sb-bg:#fbe3ee;         /* サイドバー背景（ピンク薄） */
-  --sb-deep:#e9679f;       /* セクション見出し（ピンク濃いめ） */
-  --sb-deep2:#f08cb8;      /* セクション見出しホバー */
-  --sb-head:#e75a97;       /* ブランドカードのピンク */
+  --sb-bg:#fbe5dc;         /* サイドバー背景（ピンク薄） */
+  --sb-deep:#c05134;       /* セクション見出し（ピンク濃いめ） */
+  --sb-deep2:#d4603c;      /* セクション見出しホバー */
+  --sb-head:#b8492e;       /* ブランドカードのピンク */
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:"Hiragino Kaku Gothic ProN","Yu Gothic UI","Meiryo",sans-serif;background:var(--bg);color:var(--text);font-size:14px}
@@ -28,7 +28,7 @@ aside#sidebar{width:var(--sb-w);flex-shrink:0;background:var(--sb-bg);border-rig
 .content{flex:1;min-width:0;display:flex;flex-direction:column}
 main{width:100%;max-width:1280px;margin:0 auto;padding:20px;flex:1}
 /* ブランドカード */
-.sb-brand{background:linear-gradient(160deg,var(--sb-head),#d6336c);border-radius:14px;padding:14px 12px;text-align:center;color:#fff;margin-bottom:10px}
+.sb-brand{background:linear-gradient(160deg,var(--sb-head),#b8492e);border-radius:14px;padding:14px 12px;text-align:center;color:#fff;margin-bottom:10px}
 .sb-brand .logo{background:#fff;border-radius:10px;width:64px;height:64px;margin:0 auto 8px;display:flex;align-items:center;justify-content:center;
   color:var(--accent);font-weight:900;font-size:20px;letter-spacing:1px;box-shadow:0 2px 8px rgba(0,0,0,.15)}
 .sb-brand h1{font-size:15px;font-weight:800;line-height:1.4}
@@ -41,7 +41,7 @@ main{width:100%;max-width:1280px;margin:0 auto;padding:20px;flex:1}
 /* マイページボタン */
 .sb-mypage{display:flex;align-items:center;justify-content:center;gap:6px;background:#fff;border:1px solid var(--border);
   border-radius:999px;padding:8px;font-size:13px;font-weight:800;color:var(--accent);cursor:pointer;width:100%;margin-bottom:10px;
-  box-shadow:0 1px 4px rgba(214,51,108,.12)}
+  box-shadow:0 1px 4px rgba(207,89,64,.12)}
 .sb-mypage:hover{background:var(--accent-soft)}
 /* アラートカード */
 .sb-alert{background:#fff;border:1px solid var(--border);border-radius:10px;padding:8px 10px;margin-bottom:8px;cursor:pointer;font-size:12px}
@@ -50,7 +50,7 @@ main{width:100%;max-width:1280px;margin:0 auto;padding:20px;flex:1}
 .sb-alert .row b{flex:1;font-size:12px}
 .sb-alert .cnt{background:var(--danger);color:#fff;border-radius:999px;font-size:11px;font-weight:800;padding:1px 8px}
 .sb-alert .cnt.y{background:var(--warn)}
-.sb-alert .cnt.z{background:#c8ccd4}
+.sb-alert .cnt.z{background:#ccc3bf}
 .sb-alert .sub-row{display:flex;justify-content:space-between;font-size:11px;color:var(--sub);padding:1px 0 1px 14px}
 /* 更新通知バナー */
 .sb-update{background:var(--ok-soft);border:1px solid #b6dfc7;color:var(--ok);border-radius:10px;
@@ -61,7 +61,7 @@ main{width:100%;max-width:1280px;margin:0 auto;padding:20px;flex:1}
 .sb-ann{background:#fff;border:1px solid var(--border);border-radius:10px;padding:8px 10px;margin-bottom:8px;font-size:12px}
 .sb-ann-head{display:flex;align-items:center;gap:6px;font-weight:800;margin-bottom:4px}
 .sb-ann-head .cnt{background:var(--danger);color:#fff;border-radius:999px;font-size:11px;padding:1px 8px}
-.sb-ann-head .cnt.z{background:#c8ccd4}
+.sb-ann-head .cnt.z{background:#ccc3bf}
 .sb-ann-head a{margin-left:auto;color:var(--accent);text-decoration:none;font-size:15px;line-height:1}
 .ann-item{display:flex;align-items:center;gap:6px;padding:4px 2px;cursor:pointer;border-radius:6px}
 .ann-item:hover{background:var(--accent-soft)}
@@ -78,7 +78,7 @@ main{width:100%;max-width:1280px;margin:0 auto;padding:20px;flex:1}
 .sb-item{width:100%;display:flex;align-items:center;gap:8px;background:transparent;border:none;text-align:left;
   padding:8px 10px 8px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;color:var(--text)}
 .sb-item:hover{background:#fff}
-.sb-item.active{background:#fff;color:var(--accent);font-weight:800;box-shadow:0 1px 4px rgba(214,51,108,.15)}
+.sb-item.active{background:#fff;color:var(--accent);font-weight:800;box-shadow:0 1px 4px rgba(207,89,64,.15)}
 .sb-item .ic{width:18px;text-align:center}
 .sb-single{margin-bottom:6px}
 .sb-foot{margin-top:10px;text-align:center}
@@ -102,17 +102,17 @@ main{width:100%;max-width:1280px;margin:0 auto;padding:20px;flex:1}
 .stat .num{font-size:26px;font-weight:800;color:var(--accent)}
 .stat .lbl{font-size:12px;color:var(--sub);margin-top:2px}
 table{width:100%;border-collapse:collapse;font-size:13px}
-th{background:#eef2f7;text-align:left;padding:8px;border-bottom:2px solid var(--border);white-space:nowrap;font-size:12px}
+th{background:#f8efeb;text-align:left;padding:8px;border-bottom:2px solid var(--border);white-space:nowrap;font-size:12px}
 td{padding:8px;border-bottom:1px solid var(--border);vertical-align:top}
 tr.clickable{cursor:pointer}
-tr.clickable:hover{background:#f3f7fc}
+tr.clickable:hover{background:#fdf3ef}
 .tablewrap{overflow-x:auto}
 .badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap}
 .b-blue{background:var(--accent-soft);color:var(--accent)}
 .b-green{background:var(--ok-soft);color:var(--ok)}
 .b-red{background:var(--danger-soft);color:var(--danger)}
 .b-yellow{background:var(--warn-soft);color:var(--warn)}
-.b-gray{background:#eceff3;color:var(--sub)}
+.b-gray{background:#f1eae7;color:var(--sub)}
 button.btn{background:var(--accent);color:#fff;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600}
 button.btn:hover{filter:brightness(1.1)}
 button.btn.secondary{background:#fff;color:var(--accent);border:1px solid var(--accent)}
@@ -144,7 +144,7 @@ button.btn.ghost{background:#fff;color:var(--sub);border:1px solid var(--border)
 .doc-status{border:1px solid var(--border);border-radius:6px;padding:3px 6px;font-size:12px;background:#fff}
 .st-未依頼{color:var(--sub)} .st-依頼中{color:var(--warn)} .st-受領{color:var(--accent)} .st-確認済{color:var(--ok)} .st-対象外{color:#aaa}
 .tag-row{display:flex;gap:6px;flex-wrap:wrap}
-.progress{height:8px;background:#e5eaf1;border-radius:6px;overflow:hidden;min-width:80px}
+.progress{height:8px;background:#f1e5e0;border-radius:6px;overflow:hidden;min-width:80px}
 .progress>div{height:100%;background:var(--ok)}
 .detail-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:13px}
@@ -153,7 +153,7 @@ button.btn.ghost{background:#fff;color:var(--sub);border:1px solid var(--border)
 /* ===== タレント（カオナビ型 顔写真一覧）===== */
 .talent-grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(var(--card-w,150px),1fr))}
 .tcard{background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px 10px;text-align:center;cursor:pointer;transition:box-shadow .15s, transform .15s}
-.tcard:hover{box-shadow:0 6px 20px rgba(18,50,94,.15);transform:translateY(-2px)}
+.tcard:hover{box-shadow:0 6px 20px rgba(74,53,45,.15);transform:translateY(-2px)}
 .avatar{width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 8px;color:#fff;font-weight:800;font-size:22px;letter-spacing:.5px}
 .avatar.sm{width:34px;height:34px;font-size:13px;margin:0}
 .avatar.lg{width:80px;height:80px;font-size:28px}
@@ -169,12 +169,12 @@ button.btn.ghost{background:#fff;color:var(--sub);border:1px solid var(--border)
 .skmap td.namecell{text-align:left;white-space:nowrap;position:sticky;left:0;background:#fff;z-index:1}
 .skmap th.cat{background:var(--accent-soft);color:var(--accent);font-size:11px}
 .sklv{display:inline-block;width:30px;height:24px;line-height:24px;border-radius:6px;font-size:12px;font-weight:700;text-align:center}
-.lv0{background:#f1f3f6;color:#b7bec8}
-.lv1{background:#e8f0fb;color:#5b83b8}
-.lv2{background:#cfe0f5;color:#3567a3}
-.lv3{background:#9dc1e8;color:#1c4a86}
-.lv4{background:#5b93cf;color:#fff}
-.lv5{background:#1a56a8;color:#fff}
+.lv0{background:#f4eeeb;color:#c0b3ad}
+.lv1{background:#fdeee9;color:#9e4b30}
+.lv2{background:#fad6c9;color:#8f4029}
+.lv3{background:#f2ac93;color:#6b2d16}
+.lv4{background:#c25036;color:#fff}
+.lv5{background:#a63c22;color:#fff}
 .sk-input-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px}
 .sk-input-row .skname{flex:1}
 .lvseg{display:inline-flex;gap:3px}
@@ -210,10 +210,10 @@ th .en{display:block;font-weight:400}
 .avgbox span{font-size:10px;opacity:.8}
 .legend-dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
 footer{text-align:center;color:var(--sub);font-size:11px;padding:16px}
-#toast{position:fixed;bottom:18px;right:18px;background:#12325e;color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;display:none;z-index:99;box-shadow:0 8px 24px rgba(0,0,0,.3)}
+#toast{position:fixed;bottom:18px;right:18px;background:#4a352d;color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;display:none;z-index:99;box-shadow:0 8px 24px rgba(0,0,0,.3)}
 #toast.err{background:var(--danger)}
 .login-wrap{min-height:80vh;display:flex;align-items:center;justify-content:center}
-.login-card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:30px;max-width:380px;width:100%;box-shadow:0 10px 40px rgba(18,50,94,.12)}
+.login-card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:30px;max-width:380px;width:100%;box-shadow:0 10px 40px rgba(74,53,45,.12)}
 .login-card h2{font-size:18px;margin-bottom:4px}
 .login-card .muted{margin-bottom:16px}
 .login-card input{width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:10px;font-size:14px}
@@ -988,7 +988,9 @@ function render(){
 
 /* ================= タレント・スキル（カオナビ型） ================= */
 /* イニシャルアバター（顔写真の代わり）。名前から色を決めて安定させる */
-const AVATAR_COLORS = ['#1a56a8','#1e7e4e','#b7791f','#7c3aed','#c2410c','#0e7490','#be185d','#4d7c0f'];
+/* アバターの色。人を見分けるために「あえて」色相を散らしている
+   （テーマ色に揃えると全員同じ色になり判別できないため） */
+const AVATAR_COLORS = ['#c2410c','#1e7e4e','#b7791f','#7c3aed','#0e7490','#a8324a','#4d7c0f','#3f4d8a'];
 function avatarOf(e, cls){
   const src = (e.nameRoma||e.nameKanji||'?').trim();
   const parts = src.split(/\s+/);
@@ -1092,13 +1094,13 @@ function radarSvg(labels, values, size, opts){
   let grid='';
   for(let g=1; g<=max; g++){
     grid += `<polygon points="${labels.map((_,i)=>pt(i,g).map(x=>x.toFixed(1)).join(',')).join(' ')}"
-      fill="none" stroke="${g===max?'#c6cfda':'#e5eaf1'}" stroke-width="1"/>`;
+      fill="none" stroke="${g===max?'#dcc9c1':'#f1e5e0'}" stroke-width="1"/>`;
   }
   const axes = labels.map((_,i)=>{ const [x,y]=pt(i,max);
-    return `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="#e5eaf1"/>`; }).join('');
+    return `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="#f1e5e0"/>`; }).join('');
   const poly = labels.map((_,i)=>pt(i,values[i]).map(x=>x.toFixed(1)).join(',')).join(' ');
   const dots = labels.map((_,i)=>{ const [x,y]=pt(i,values[i]);
-    return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.5" fill="#1a56a8"/>`; }).join('');
+    return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.5" fill="#b8492e"/>`; }).join('');
   const texts = labels.map((l,i)=>{ const a=-Math.PI/2 + i*2*Math.PI/n;
     const x=cx+(r+13)*Math.cos(a), y=cy+(r+13)*Math.sin(a);
     const anchor = Math.abs(Math.cos(a))<.3?'middle':(Math.cos(a)>0?'start':'end');
@@ -1106,7 +1108,7 @@ function radarSvg(labels, values, size, opts){
       font-size="${o.fs||10}" fill="#6b7280">${esc(l)}</text>`; }).join('');
   return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
     ${grid}${axes}
-    <polygon points="${poly}" fill="rgba(26,86,168,.22)" stroke="#1a56a8" stroke-width="1.5"/>
+    <polygon points="${poly}" fill="rgba(207,89,64,.22)" stroke="#b8492e" stroke-width="1.5"/>
     ${dots}${texts}</svg>`;
 }
 function empRadar(empId, size, fs){
@@ -1251,8 +1253,8 @@ function skillMapHtml(){
     const avg = withLv.length? (withLv.reduce((a,b)=>a+b,0)/withLv.length) : 0;
     return `<td class="muted" style="font-weight:700">${fmtScore(avg)}</td>`; }).join('');
   return `<div class="tablewrap"><table class="skmap">
-    <tr><th class="namecell" style="background:#eef2f7"></th>${catRow}</tr>
-    <tr><th class="namecell" style="background:#eef2f7">氏名</th>${skillRow}</tr>
+    <tr><th class="namecell" style="background:#f8efeb"></th>${catRow}</tr>
+    <tr><th class="namecell" style="background:#f8efeb">氏名</th>${skillRow}</tr>
     ${rows}
     <tr><td class="namecell muted" style="font-weight:700">平均（評価済のみ）</td>${avgCells}</tr>
   </table></div>
@@ -2030,7 +2032,7 @@ function evalProgressHtml(list){
   const ranks = {};
   list.forEach(v=>{ const c=evalCalc(v); if(c.rank) ranks[c.rank]=(ranks[c.rank]||0)+1; });
   const maxR = Math.max(1, ...GRADES.map(g=>ranks[g]||0));
-  const RANK_COLORS = {S:'#1e7e4e', A:'#4d9e6f', B:'#1a56a8', C:'#b7791f', D:'#c0392b'};
+  const RANK_COLORS = {S:'#1e7e4e', A:'#4d9e6f', B:'#b8492e', C:'#b7791f', D:'#c0392b'};
   const pending = list.filter(v=>v.status!=='確定');
   return `
   <div class="grid" style="grid-template-columns:1fr 1fr;margin-bottom:14px;align-items:start">
@@ -2050,7 +2052,7 @@ function evalProgressHtml(list){
       ${GRADES.map(g=>{ const n=ranks[g]||0; return `
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;font-size:12px">
           <b style="width:16px">${g}</b>
-          <div style="flex:1;background:#eef2f7;border-radius:5px;height:16px;overflow:hidden">
+          <div style="flex:1;background:#f8efeb;border-radius:5px;height:16px;overflow:hidden">
             <div style="width:${n*100/maxR}%;height:100%;background:${RANK_COLORS[g]}"></div>
           </div>
           <span style="width:34px;text-align:right">${n}名</span>
@@ -2835,7 +2837,7 @@ th{background:#f2f2f2;width:11em;font-weight:700}
 .sig{margin-top:28px}
 .sig .line{margin:10px 0}
 .note{font-size:8.5pt;color:#444;line-height:1.6}
-.toolbar{position:fixed;top:8px;right:8px;background:#12325e;padding:8px 10px;border-radius:8px;font-family:sans-serif}
+.toolbar{position:fixed;top:8px;right:8px;background:#4a352d;padding:8px 10px;border-radius:8px;font-family:sans-serif}
 .toolbar button{font-size:13px;padding:6px 14px;margin-left:6px;cursor:pointer}
 .disclaimer{margin-top:30px;padding:8px;border:1px dashed #999;font-size:8.5pt;color:#555;font-family:sans-serif}
 @media print{.toolbar,.disclaimer{display:none}}
