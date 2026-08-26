@@ -178,6 +178,15 @@ th .en{display:block;font-weight:400}
   background:#fff;border:1px solid var(--border);border-radius:8px;padding:6px 10px;cursor:pointer;user-select:none}
 .langtoggle input{cursor:pointer}
 .sk-input-row .skname .en{margin-left:6px}
+/* スキル配下のタスクリスト */
+.task-toggle{font-size:11px;color:var(--accent);text-decoration:none;margin-left:8px;white-space:nowrap;font-weight:700}
+.task-toggle:hover{text-decoration:underline}
+.task-block{background:var(--accent-soft);border-radius:8px;padding:8px 12px;margin:2px 0 8px;font-size:12px}
+.task-line{padding:3px 0;line-height:1.5}
+.task-line.edit{display:flex;align-items:center;gap:6px}
+.task-line.edit input{flex:1;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:#fff}
+.task-line.edit input.task-en{flex:0.8;color:var(--sub)}
+.task-line .tno{color:var(--sub);width:18px;text-align:right;flex-shrink:0}
 .legend-dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
 footer{text-align:center;color:var(--sub);font-size:11px;padding:16px}
 #toast{position:fixed;bottom:18px;right:18px;background:#12325e;color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;display:none;z-index:99;box-shadow:0 8px 24px rgba(0,0,0,.3)}
@@ -396,6 +405,12 @@ let talentFilter = {q:'', dept:'', nat:'', status:'在籍', size:'m', incFamily:
 /* スキル管理タブの状態 */
 let skillSub = 'map';       // map | input | summary | master
 let skillEmpId = '';        // 入力対象の従業員
+/* タスクリストの開閉状態（スキルIDごと） */
+let skillTaskOpen = {};
+function toggleTasks(id){ skillTaskOpen[id] = !skillTaskOpen[id]; render(); }
+function setAllTasks(open){
+  data.skillDefs.forEach(s=>{ skillTaskOpen[s.id] = open; }); render();
+}
 /* スキル画面で英語を併記するか（外国籍スタッフ向け。ブラウザに記憶する） */
 let skillLangEn = (function(){ try{ return localStorage.getItem('kmt-skill-en') !== '0'; }catch(e){ return true; } })();
 function toggleSkillLang(on){
@@ -823,6 +838,33 @@ function avatarOf(e, cls){
 }
 function isFamilyRec(e){ return (e.position||'')==='家族（社員外）'; }
 
+/* スキルごとの具体的タスク（初期テンプレート。登録支援機関の義務的支援10項目＋人材紹介業務に準拠） */
+const DEFAULT_SKILL_TASKS = {
+ s01:[{jp:'敬語での電話・来客応対',en:'Polite phone and visitor handling'},{jp:'ビジネスメール・文書の作成',en:'Writing business emails and documents'},{jp:'会議での報告・議事録作成',en:'Reporting in meetings, taking minutes'},{jp:'契約書・行政文書の読解',en:'Reading contracts and official documents'}],
+ s02:[{jp:'海外候補者との面談・メール対応',en:'Interviews and email with overseas candidates'},{jp:'英文資料・契約関連書類の読解',en:'Reading English documents and contracts'},{jp:'送出機関との連絡調整',en:'Coordinating with sending organizations'}],
+ s03:[{jp:'宗教・文化的配慮（礼拝・食事等）の調整',en:'Arranging religious and cultural accommodations'},{jp:'やさしい日本語＋母国語での説明',en:'Explaining in plain Japanese with native-language support'},{jp:'文化間の誤解・トラブルの仲裁と予防',en:'Mediating and preventing cross-cultural misunderstandings'}],
+ s10:[{jp:'介護施設・企業へのテレアポ・訪問営業',en:'Cold calls and visits to care facilities and companies'},{jp:'問い合わせからの商談化',en:'Converting inquiries into meetings'},{jp:'展示会・セミナーでのリード獲得',en:'Lead generation at exhibitions and seminars'},{jp:'紹介・口コミによる開拓',en:'Referral-based development'}],
+ s11:[{jp:'求人条件（業務内容・給与・シフト）のヒアリング',en:'Interviewing clients on job conditions'},{jp:'受入れ体制・在留資格適合性の確認',en:'Checking acceptance readiness and visa eligibility'},{jp:'候補者プロフィールの提案・マッチング',en:'Proposing and matching candidate profiles'}],
+ s12:[{jp:'紹介手数料・契約条件の交渉',en:'Negotiating placement fees and contract terms'},{jp:'雇用条件のすり合わせ・内定調整',en:'Aligning employment terms and offer coordination'},{jp:'人材紹介契約書の締結',en:'Concluding placement agreements'}],
+ s13:[{jp:'入社後フォロー訪問・定着支援',en:'Post-placement follow-up and retention support'},{jp:'既存顧客からの追加求人獲得',en:'Winning repeat job orders'},{jp:'クレーム対応・関係修復',en:'Handling complaints and repairing relationships'}],
+ s20:[{jp:'在留資格認定証明書（COE）交付申請',en:'Certificate of Eligibility (COE) applications'},{jp:'在留期間更新・在留資格変更申請',en:'Visa renewals and change-of-status applications'},{jp:'支援計画書の作成・四半期の定期届出',en:'Support plans and quarterly reports to Immigration'},{jp:'随時届出（契約変更・終了等）',en:'Ad-hoc notifications (contract changes, termination)'}],
+ s21:[{jp:'事前ガイダンス・生活オリエンテーションの実施',en:'Pre-arrival guidance and life orientation sessions'},{jp:'住居確保・ライフライン契約の支援',en:'Housing and utility contract support'},{jp:'銀行口座・携帯電話契約の同行支援',en:'Accompanying for bank accounts and phone contracts'},{jp:'出入国時の空港送迎',en:'Airport pickup and drop-off'}],
+ s22:[{jp:'四半期ごとの定期面談（本人・監督者）',en:'Quarterly interviews with workers and supervisors'},{jp:'相談・苦情への対応と記録',en:'Handling and recording consultations and complaints'},{jp:'転職支援（人員整理等の場合）',en:'Job-change support when required'},{jp:'日本人との交流促進の企画',en:'Organizing exchange with the local community'}],
+ s23:[{jp:'入管への定期・随時届出',en:'Regular and ad-hoc reports to the Immigration Bureau'},{jp:'公的手続（住民登録・社保・税）への同行',en:'Accompanying to municipal, insurance and tax procedures'},{jp:'ハローワーク・労基署への届出対応',en:'Filings with Hello Work and labor standards office'},{jp:'送出機関・関係団体との調整',en:'Coordination with sending organizations and partners'}],
+ s30:[{jp:'Instagram・TikTok・Facebookの投稿企画・運用',en:'Planning and running social media accounts'},{jp:'求職者向けライブ配信・Q&A',en:'Live sessions and Q&A for candidates'},{jp:'コメント・DM対応',en:'Responding to comments and DMs'},{jp:'投稿の分析・改善',en:'Analyzing and improving post performance'}],
+ s31:[{jp:'求人紹介動画の撮影・編集',en:'Filming and editing job-introduction videos'},{jp:'多言語の告知画像・チラシ作成',en:'Creating multilingual graphics and flyers'},{jp:'社員インタビュー記事の作成',en:'Writing staff interview articles'}],
+ s32:[{jp:'母集団形成キャンペーンの企画',en:'Planning candidate-pipeline campaigns'},{jp:'送出国別チャネルの開拓',en:'Developing channels per sending country'},{jp:'登録会・説明会の企画運営',en:'Organizing registration and info sessions'}],
+ s33:[{jp:'応募・成約データの集計とレポート',en:'Compiling application and placement reports'},{jp:'SNS・広告の効果測定',en:'Measuring social media and ad performance'},{jp:'KPIダッシュボードの管理',en:'Maintaining KPI dashboards'}],
+ s40:[{jp:'勤怠集計・給与計算の準備',en:'Attendance aggregation and payroll preparation'},{jp:'社会保険・雇用保険の手続き',en:'Social and employment insurance procedures'},{jp:'36協定・就業規則の管理',en:'Managing labor agreements and work rules'},{jp:'年末調整・法定調書の対応',en:'Year-end tax adjustment and statutory forms'}],
+ s41:[{jp:'紹介手数料・支援委託費の請求書発行',en:'Invoicing placement fees and support charges'},{jp:'入金確認・督促',en:'Payment reconciliation and reminders'},{jp:'経費精算・仕訳',en:'Expense processing and bookkeeping'}],
+ s42:[{jp:'雇用契約書・紹介契約書の作成管理',en:'Drafting and managing employment and placement contracts'},{jp:'支援委託契約の管理',en:'Managing support outsourcing contracts'},{jp:'個人情報書類の保管・廃棄管理',en:'Secure retention and disposal of personal data'}],
+ s43:[{jp:'Excel関数・集計表の作成',en:'Excel formulas and summary sheets'},{jp:'クラウドツール（Drive・勤怠・本システム）の活用',en:'Using cloud tools (Drive, attendance, this system)'},{jp:'オンライン会議・チャットの運用',en:'Running online meetings and chat'}],
+ s50:[{jp:'業務フローの見直し・改善提案',en:'Reviewing workflows and proposing improvements'},{jp:'トラブルの原因分析と再発防止',en:'Root-cause analysis and prevention'},{jp:'制度・法改正への対応検討',en:'Adapting to regulatory and legal changes'}],
+ s51:[{jp:'新人の業務指導・同行',en:'Training and shadowing new staff'},{jp:'マニュアル・手順書の作成',en:'Writing manuals and procedures'},{jp:'フィードバック面談の実施',en:'Holding feedback sessions'}],
+ s52:[{jp:'業務分担・進捗管理',en:'Task assignment and progress tracking'},{jp:'チーム会議の運営',en:'Running team meetings'},{jp:'メンバーの目標設定支援・評価',en:'Supporting goal-setting and evaluation'}],
+ s53:[{jp:'個人情報・マイナンバーの適正管理',en:'Proper handling of personal data and My Number'},{jp:'入管法・労働法の基礎知識の習得',en:'Learning immigration and labor law basics'},{jp:'不法就労防止のチェック',en:'Checks to prevent illegal employment'},{jp:'職業安定法（手数料規制等）の遵守',en:'Employment Security Act compliance (fee rules)'}],
+};
+
 /* スキルユーティリティ */
 function skillCats(){ return [...new Set(data.skillDefs.map(s=>s.category))]; }
 /* カテゴリの英語名（そのカテゴリの最初のスキルの category_en を採用） */
@@ -1041,12 +1083,15 @@ function skillInputHtml(){
         `<button class="${lv===n?'on':''}" ${editable?`onclick="setSkillLevel('${skillEmpId}','${s.id}',${n})"`:'disabled'}
           title="${SKILL_LEVELS[n]}${skillLangEn?` / ${SKILL_LEVELS_EN[n]}`:''}">${n||'—'}</button>`).join('');
       const desc = s.description || (skillLangEn && s.description_en);
+      const tasks = s.tasks||[];
+      const open = !!skillTaskOpen[s.id];
       return `<div class="sk-input-row">
         <span class="skname">${jpEn(s.name, s.name_en)}
+          <a class="task-toggle" href="javascript:toggleTasks('${s.id}')">${open?'▾':'▸'} タスク${tasks.length}${skillLangEn?` <span class="en">tasks</span>`:''}</a>
           ${desc?`<br><span class="muted">${esc(s.description||'')}${
             skillLangEn&&s.description_en?`<span class="en" style="margin-left:${s.description?'6px':'0'}">${esc(s.description_en)}</span>`:''}</span>`:''}</span>
         <span class="lvseg">${seg}</span>
-      </div>`;
+      </div>${open? taskBlockHtml(s) : ''}`;
     }).join('');
     return `<div class="section-title">${jpEn(cat, catEn(cat))}</div>${items}`;
   }).join('');
@@ -1055,6 +1100,8 @@ function skillInputHtml(){
     <select onchange="skillEmpId=this.value;render()">
       ${emps.map(x=>`<option value="${x.id}" ${x.id===skillEmpId?'selected':''}>${esc(x.nameKanji||x.nameRoma)}${x.empNo?`（${esc(x.empNo)}）`:''}</option>`).join('')}
     </select>
+    <button class="btn small ghost" onclick="setAllTasks(true)">タスクをすべて展開</button>
+    <button class="btn small ghost" onclick="setAllTasks(false)">すべて閉じる</button>
     ${editable?'':'<span class="muted">閲覧のみ（編集は管理者権限が必要です）</span>'}
   </div>
   <div class="grid" style="grid-template-columns:1fr 300px;align-items:start">
@@ -1117,6 +1164,7 @@ function skillMasterHtml(){
       <td>${esc(s.category)}<br>${cell(s,'category_en','English (category)')}</td>
       <td><b>${esc(s.name)}</b><br>${cell(s,'name_en','English (skill name)')}</td>
       <td class="muted">${esc(s.description||'—')}<br>${cell(s,'description_en','English (description)')}</td>
+      <td><a href="javascript:void(0)" onclick="skillSub='input';skillTaskOpen['${s.id}']=true;render()" title="個人スキル画面でタスクを編集">${(s.tasks||[]).length}件</a></td>
       <td>${s.sort_order}</td>
       <td><button class="btn small danger" onclick="delSkillDef('${s.id}')">削除</button></td>
     </tr>`).join('');
@@ -1142,7 +1190,7 @@ function skillMasterHtml(){
   </div>
   <div class="tablewrap"><table>
     <tr><th>カテゴリ <span class="en">Category</span></th><th>スキル名 <span class="en">Skill</span></th>
-        <th>説明 <span class="en">Description</span></th><th>順序</th><th></th></tr>${rows}
+        <th>説明 <span class="en">Description</span></th><th>タスク <span class="en">Tasks</span></th><th>順序</th><th></th></tr>${rows}
   </table></div>
   <p class="muted" style="margin-top:8px">スキルを削除すると、そのスキルの全社員のレベル記録も削除されます。</p>`;
 }
@@ -1161,6 +1209,63 @@ async function updateSkillDef(id, field, value){
   }
   render(); toast('保存しました');
 }
+/* スキル配下のタスクリスト。管理者はその場で追加・編集・削除できる */
+function taskBlockHtml(s){
+  const tasks = s.tasks||[];
+  if(!canEdit()){
+    return `<div class="task-block">
+      ${tasks.map(t=>`<div class="task-line">・${esc(t.jp)}${skillLangEn&&t.en?` <span class="en">${esc(t.en)}</span>`:''}</div>`).join('')
+        || '<div class="muted">タスクは登録されていません。</div>'}
+    </div>`;
+  }
+  return `<div class="task-block">
+    ${tasks.map((t,i)=>`
+      <div class="task-line edit">
+        <span class="tno">${i+1}.</span>
+        <input value="${esc(t.jp)}" placeholder="タスク（日本語）" onchange="updateTask('${s.id}',${i},'jp',this.value)">
+        <input value="${esc(t.en||'')}" placeholder="English" class="task-en" onchange="updateTask('${s.id}',${i},'en',this.value)">
+        <button class="btn small ghost" title="削除" onclick="delTask('${s.id}',${i})">✕</button>
+      </div>`).join('')}
+    <div class="task-line edit">
+      <span class="tno">＋</span>
+      <input id="newTaskJp-${s.id}" placeholder="新しいタスク（日本語）">
+      <input id="newTaskEn-${s.id}" placeholder="English (optional)" class="task-en">
+      <button class="btn small" onclick="addTask('${s.id}')">追加</button>
+    </div>
+  </div>`;
+}
+async function saveTasks(skillId){
+  const s = data.skillDefs.find(x=>x.id===skillId); if(!s) return;
+  await q(sb.from('skill_defs').update({tasks:s.tasks||[]}).eq('id', skillId));
+}
+async function updateTask(skillId, idx, field, value){
+  if(!canEdit()){ toast(denyMsg(), true); return; }
+  const s = data.skillDefs.find(x=>x.id===skillId);
+  if(!s || !s.tasks || !s.tasks[idx]) return;
+  s.tasks[idx][field] = value.trim();
+  await saveTasks(skillId);
+  toast('保存しました');
+}
+async function addTask(skillId){
+  if(!canEdit()){ toast(denyMsg(), true); return; }
+  const jp = document.getElementById('newTaskJp-'+skillId).value.trim();
+  const en = document.getElementById('newTaskEn-'+skillId).value.trim();
+  if(!jp){ toast('タスク（日本語）を入力してください', true); return; }
+  const s = data.skillDefs.find(x=>x.id===skillId); if(!s) return;
+  s.tasks = s.tasks||[];
+  s.tasks.push({jp, en});
+  await saveTasks(skillId);
+  render(); toast('タスクを追加しました');
+}
+async function delTask(skillId, idx){
+  if(!canEdit()){ toast(denyMsg(), true); return; }
+  const s = data.skillDefs.find(x=>x.id===skillId);
+  if(!s || !s.tasks || !s.tasks[idx]) return;
+  if(!confirm(`タスク「${s.tasks[idx].jp}」を削除しますか？`)) return;
+  s.tasks.splice(idx,1);
+  await saveTasks(skillId);
+  render(); toast('削除しました');
+}
 async function setSkillLevel(empId, skillId, level){
   if(!canEdit()){ toast(denyMsg(), true); return; }
   await q(sb.from('employee_skills').upsert(
@@ -1176,7 +1281,7 @@ async function addSkillDef(){
   const maxOrder = Math.max(0, ...data.skillDefs.map(s=>s.sort_order||0));
   const def = {id:'sk-'+uid().slice(0,8), category:cat, name,
     category_en: v('skCatEn') || catEn(cat), name_en: v('skNameEn'),
-    description: v('skDesc'), description_en: v('skDescEn'), sort_order:maxOrder+1};
+    description: v('skDesc'), description_en: v('skDescEn'), sort_order:maxOrder+1, tasks:[]};
   await q(sb.from('skill_defs').insert(def));
   data.skillDefs.push(def);
   render(); toast('スキルを追加しました');
@@ -1190,10 +1295,10 @@ async function delSkillDef(id){
   render(); toast('削除しました');
 }
 async function resetSkillDefs(){
-  if(!confirm('スキルマスタを初期テンプレート（23項目）に戻しますか？\n追加した独自スキルと、そのレベル記録は削除されます。')) return;
+  if(!confirm('スキルマスタを初期テンプレート（23項目・タスク付き）に戻しますか？\n追加した独自スキルと、そのレベル記録は削除されます。')) return;
+  const defs = DEFAULT_SKILL_DEFS.map(s=>Object.assign({}, s, {tasks: DEFAULT_SKILL_TASKS[s.id]||[]}));
   await q(sb.from('skill_defs').delete().neq('id',''));
-  await q(sb.from('skill_defs').insert(DEFAULT_SKILL_DEFS));
-  data.skillDefs = JSON.parse(JSON.stringify(DEFAULT_SKILL_DEFS));
+  await q(sb.from('skill_defs').insert(defs));
   await loadAll(); render(); toast('初期テンプレートに戻しました');
 }
 

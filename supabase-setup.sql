@@ -145,6 +145,9 @@ create table if not exists public.skill_defs (
 alter table public.skill_defs add column if not exists name_en        text default '';
 alter table public.skill_defs add column if not exists description_en text default '';
 alter table public.skill_defs add column if not exists category_en    text default '';
+-- スキルごとの具体的タスク [{jp,en},...]。初期データはアプリの
+-- 「スキルマスタ > 初期テンプレートに戻す」で投入される（DEFAULT_SKILL_TASKS）
+alter table public.skill_defs add column if not exists tasks jsonb not null default '[]'::jsonb;
 
 create table if not exists public.employee_skills (
   employee_id uuid not null references public.employees(id) on delete cascade,
