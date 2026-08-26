@@ -141,6 +141,10 @@ create table if not exists public.skill_defs (
   description text default '',
   sort_order  int default 0
 );
+-- 英語併記用（外国籍スタッフ向け。アプリの「スキルマスタ」から編集可）
+alter table public.skill_defs add column if not exists name_en        text default '';
+alter table public.skill_defs add column if not exists description_en text default '';
+alter table public.skill_defs add column if not exists category_en    text default '';
 
 create table if not exists public.employee_skills (
   employee_id uuid not null references public.employees(id) on delete cascade,
@@ -322,32 +326,32 @@ create policy kmt_es_update on public.employee_skills for update to authenticate
 create policy kmt_es_delete on public.employee_skills for delete to authenticated using (public.my_rank() >= 2);
 
 -- 4b) スキルの初期テンプレート（空のときだけ投入・再実行安全） --------
-insert into public.skill_defs (id, category, name, description, sort_order)
+insert into public.skill_defs (id, category, category_en, name, name_en, description, description_en, sort_order)
 select * from (values
- ('s01','語学・コミュニケーション','日本語（ビジネス）','会議・文書・電話応対レベル',1),
- ('s02','語学・コミュニケーション','英語','業務コミュニケーションレベル',2),
- ('s03','語学・コミュニケーション','多文化コミュニケーション','国籍・文化の異なる相手との調整力',3),
- ('s10','紹介営業','新規開拓・アポ獲得','',10),
- ('s11','紹介営業','求人ヒアリング・提案','',11),
- ('s12','紹介営業','クロージング・条件交渉','',12),
- ('s13','紹介営業','顧客関係維持','既存顧客フォロー・リピート獲得',13),
- ('s20','支援業務','入管手続き・申請書類','在留資格の申請・更新・届出',20),
- ('s21','支援業務','生活オリエンテーション','住居・銀行・行政手続きの案内',21),
- ('s22','支援業務','定期面談・相談対応','',22),
- ('s23','支援業務','行政・関係機関連携','入管・ハローワーク・支援団体との調整',23),
- ('s30','マーケティング','SNS運用・発信','',30),
- ('s31','マーケティング','コンテンツ制作','画像・動画・記事の制作',31),
- ('s32','マーケティング','採用マーケティング','求職者集客・母集団形成',32),
- ('s33','マーケティング','データ分析','数値管理・レポート作成',33),
- ('s40','バックオフィス','労務・勤怠管理','',40),
- ('s41','バックオフィス','経理・請求業務','',41),
- ('s42','バックオフィス','契約書・文書管理','',42),
- ('s43','バックオフィス','PC・ITツール活用','Excel・クラウドツール等',43),
- ('s50','共通・マネジメント','問題解決・改善提案','',50),
- ('s51','共通・マネジメント','後輩指導・OJT','',51),
- ('s52','共通・マネジメント','チームマネジメント','',52),
- ('s53','共通・マネジメント','コンプライアンス理解','個人情報・入管法・労働法の理解',53)
-) as v(id, category, name, description, sort_order)
+ ('s01','語学・コミュニケーション','Language & Communication','日本語（ビジネス）','Business Japanese','会議・文書・電話応対レベル','Meetings, documents, phone support',1),
+ ('s02','語学・コミュニケーション','Language & Communication','英語','English','業務コミュニケーションレベル','Business communication level',2),
+ ('s03','語学・コミュニケーション','Language & Communication','多文化コミュニケーション','Cross-cultural Communication','国籍・文化の異なる相手との調整力','Coordinating across nationalities and cultures',3),
+ ('s10','紹介営業','Recruitment Sales','新規開拓・アポ獲得','Prospecting & Appointment Setting','','',10),
+ ('s11','紹介営業','Recruitment Sales','求人ヒアリング・提案','Job Requirement Analysis & Proposal','','',11),
+ ('s12','紹介営業','Recruitment Sales','クロージング・条件交渉','Closing & Terms Negotiation','','',12),
+ ('s13','紹介営業','Recruitment Sales','顧客関係維持','Client Relationship Management','既存顧客フォロー・リピート獲得','Follow-up and repeat business',13),
+ ('s20','支援業務','Support Services','入管手続き・申請書類','Immigration Procedures & Applications','在留資格の申請・更新・届出','Status applications, renewals, notifications',20),
+ ('s21','支援業務','Support Services','生活オリエンテーション','Life Orientation','住居・銀行・行政手続きの案内','Housing, banking, government procedures',21),
+ ('s22','支援業務','Support Services','定期面談・相談対応','Regular Interviews & Consultation','','',22),
+ ('s23','支援業務','Support Services','行政・関係機関連携','Liaison with Authorities','入管・ハローワーク・支援団体との調整','Immigration Bureau, Hello Work, support organizations',23),
+ ('s30','マーケティング','Marketing','SNS運用・発信','Social Media Management','','',30),
+ ('s31','マーケティング','Marketing','コンテンツ制作','Content Production','画像・動画・記事の制作','Images, video, articles',31),
+ ('s32','マーケティング','Marketing','採用マーケティング','Recruitment Marketing','求職者集客・母集団形成','Candidate attraction and pipeline building',32),
+ ('s33','マーケティング','Marketing','データ分析','Data Analysis','数値管理・レポート作成','Metrics management and reporting',33),
+ ('s40','バックオフィス','Back Office','労務・勤怠管理','Labor & Attendance Management','','',40),
+ ('s41','バックオフィス','Back Office','経理・請求業務','Accounting & Invoicing','','',41),
+ ('s42','バックオフィス','Back Office','契約書・文書管理','Contract & Document Management','','',42),
+ ('s43','バックオフィス','Back Office','PC・ITツール活用','PC & IT Tools','Excel・クラウドツール等','Excel, cloud tools, etc.',43),
+ ('s50','共通・マネジメント','Core & Management','問題解決・改善提案','Problem Solving & Improvement','','',50),
+ ('s51','共通・マネジメント','Core & Management','後輩指導・OJT','Mentoring & OJT','','',51),
+ ('s52','共通・マネジメント','Core & Management','チームマネジメント','Team Management','','',52),
+ ('s53','共通・マネジメント','Core & Management','コンプライアンス理解','Compliance Awareness','個人情報・入管法・労働法の理解','Privacy, immigration law, labor law',53)
+) as v(id, category, category_en, name, name_en, description, description_en, sort_order)
 where not exists (select 1 from public.skill_defs);
 
 -- 5) 最初の全体管理者 -----------------------------------------------

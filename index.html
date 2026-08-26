@@ -166,6 +166,15 @@ button.btn.ghost{background:#fff;color:var(--sub);border:1px solid var(--border)
 .lvseg button{width:30px;height:26px;border:1px solid var(--border);background:#fff;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700;color:var(--sub)}
 .lvseg button.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .radar-wrap{display:flex;justify-content:center}
+/* 英語併記（日本語の横に淡色の英語） */
+.en{font-size:11px;color:var(--sub);font-weight:400}
+th .en{display:block;font-weight:400}
+.skmap th .en{writing-mode:vertical-rl;font-size:10px}
+.section-title .en{font-size:11px;margin-left:6px}
+.langtoggle{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--sub);
+  background:#fff;border:1px solid var(--border);border-radius:8px;padding:6px 10px;cursor:pointer;user-select:none}
+.langtoggle input{cursor:pointer}
+.sk-input-row .skname .en{margin-left:6px}
 .legend-dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
 footer{text-align:center;color:var(--sub);font-size:11px;padding:16px}
 #toast{position:fixed;bottom:18px;right:18px;background:#12325e;color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;display:none;z-index:99;box-shadow:0 8px 24px rgba(0,0,0,.3)}
@@ -274,30 +283,34 @@ const SKILL_LEVELS = {
   0:'未評価', 1:'基礎知識あり', 2:'指導のもとで実行できる', 3:'一人で実行できる',
   4:'応用・改善ができる', 5:'他者に指導できる',
 };
+const SKILL_LEVELS_EN = {
+  0:'Not rated', 1:'Basic knowledge', 2:'Can perform with guidance', 3:'Can perform independently',
+  4:'Can adapt and improve', 5:'Can teach others',
+};
 const DEFAULT_SKILL_DEFS = [
- {id:'s01', category:'語学・コミュニケーション', name:'日本語（ビジネス）', description:'会議・文書・電話応対レベル', sort_order:1},
- {id:'s02', category:'語学・コミュニケーション', name:'英語', description:'業務コミュニケーションレベル', sort_order:2},
- {id:'s03', category:'語学・コミュニケーション', name:'多文化コミュニケーション', description:'国籍・文化の異なる相手との調整力', sort_order:3},
- {id:'s10', category:'紹介営業', name:'新規開拓・アポ獲得', description:'', sort_order:10},
- {id:'s11', category:'紹介営業', name:'求人ヒアリング・提案', description:'', sort_order:11},
- {id:'s12', category:'紹介営業', name:'クロージング・条件交渉', description:'', sort_order:12},
- {id:'s13', category:'紹介営業', name:'顧客関係維持', description:'既存顧客フォロー・リピート獲得', sort_order:13},
- {id:'s20', category:'支援業務', name:'入管手続き・申請書類', description:'在留資格の申請・更新・届出', sort_order:20},
- {id:'s21', category:'支援業務', name:'生活オリエンテーション', description:'住居・銀行・行政手続きの案内', sort_order:21},
- {id:'s22', category:'支援業務', name:'定期面談・相談対応', description:'', sort_order:22},
- {id:'s23', category:'支援業務', name:'行政・関係機関連携', description:'入管・ハローワーク・支援団体との調整', sort_order:23},
- {id:'s30', category:'マーケティング', name:'SNS運用・発信', description:'', sort_order:30},
- {id:'s31', category:'マーケティング', name:'コンテンツ制作', description:'画像・動画・記事の制作', sort_order:31},
- {id:'s32', category:'マーケティング', name:'採用マーケティング', description:'求職者集客・母集団形成', sort_order:32},
- {id:'s33', category:'マーケティング', name:'データ分析', description:'数値管理・レポート作成', sort_order:33},
- {id:'s40', category:'バックオフィス', name:'労務・勤怠管理', description:'', sort_order:40},
- {id:'s41', category:'バックオフィス', name:'経理・請求業務', description:'', sort_order:41},
- {id:'s42', category:'バックオフィス', name:'契約書・文書管理', description:'', sort_order:42},
- {id:'s43', category:'バックオフィス', name:'PC・ITツール活用', description:'Excel・クラウドツール等', sort_order:43},
- {id:'s50', category:'共通・マネジメント', name:'問題解決・改善提案', description:'', sort_order:50},
- {id:'s51', category:'共通・マネジメント', name:'後輩指導・OJT', description:'', sort_order:51},
- {id:'s52', category:'共通・マネジメント', name:'チームマネジメント', description:'', sort_order:52},
- {id:'s53', category:'共通・マネジメント', name:'コンプライアンス理解', description:'個人情報・入管法・労働法の理解', sort_order:53},
+ {id:'s01', category:'語学・コミュニケーション', category_en:'Language & Communication', name:'日本語（ビジネス）', name_en:'Business Japanese', description:'会議・文書・電話応対レベル', description_en:'Meetings, documents, phone support', sort_order:1},
+ {id:'s02', category:'語学・コミュニケーション', category_en:'Language & Communication', name:'英語', name_en:'English', description:'業務コミュニケーションレベル', description_en:'Business communication level', sort_order:2},
+ {id:'s03', category:'語学・コミュニケーション', category_en:'Language & Communication', name:'多文化コミュニケーション', name_en:'Cross-cultural Communication', description:'国籍・文化の異なる相手との調整力', description_en:'Coordinating across nationalities and cultures', sort_order:3},
+ {id:'s10', category:'紹介営業', category_en:'Recruitment Sales', name:'新規開拓・アポ獲得', name_en:'Prospecting & Appointment Setting', description:'', description_en:'', sort_order:10},
+ {id:'s11', category:'紹介営業', category_en:'Recruitment Sales', name:'求人ヒアリング・提案', name_en:'Job Requirement Analysis & Proposal', description:'', description_en:'', sort_order:11},
+ {id:'s12', category:'紹介営業', category_en:'Recruitment Sales', name:'クロージング・条件交渉', name_en:'Closing & Terms Negotiation', description:'', description_en:'', sort_order:12},
+ {id:'s13', category:'紹介営業', category_en:'Recruitment Sales', name:'顧客関係維持', name_en:'Client Relationship Management', description:'既存顧客フォロー・リピート獲得', description_en:'Follow-up and repeat business', sort_order:13},
+ {id:'s20', category:'支援業務', category_en:'Support Services', name:'入管手続き・申請書類', name_en:'Immigration Procedures & Applications', description:'在留資格の申請・更新・届出', description_en:'Status applications, renewals, notifications', sort_order:20},
+ {id:'s21', category:'支援業務', category_en:'Support Services', name:'生活オリエンテーション', name_en:'Life Orientation', description:'住居・銀行・行政手続きの案内', description_en:'Housing, banking, government procedures', sort_order:21},
+ {id:'s22', category:'支援業務', category_en:'Support Services', name:'定期面談・相談対応', name_en:'Regular Interviews & Consultation', description:'', description_en:'', sort_order:22},
+ {id:'s23', category:'支援業務', category_en:'Support Services', name:'行政・関係機関連携', name_en:'Liaison with Authorities', description:'入管・ハローワーク・支援団体との調整', description_en:'Immigration Bureau, Hello Work, support organizations', sort_order:23},
+ {id:'s30', category:'マーケティング', category_en:'Marketing', name:'SNS運用・発信', name_en:'Social Media Management', description:'', description_en:'', sort_order:30},
+ {id:'s31', category:'マーケティング', category_en:'Marketing', name:'コンテンツ制作', name_en:'Content Production', description:'画像・動画・記事の制作', description_en:'Images, video, articles', sort_order:31},
+ {id:'s32', category:'マーケティング', category_en:'Marketing', name:'採用マーケティング', name_en:'Recruitment Marketing', description:'求職者集客・母集団形成', description_en:'Candidate attraction and pipeline building', sort_order:32},
+ {id:'s33', category:'マーケティング', category_en:'Marketing', name:'データ分析', name_en:'Data Analysis', description:'数値管理・レポート作成', description_en:'Metrics management and reporting', sort_order:33},
+ {id:'s40', category:'バックオフィス', category_en:'Back Office', name:'労務・勤怠管理', name_en:'Labor & Attendance Management', description:'', description_en:'', sort_order:40},
+ {id:'s41', category:'バックオフィス', category_en:'Back Office', name:'経理・請求業務', name_en:'Accounting & Invoicing', description:'', description_en:'', sort_order:41},
+ {id:'s42', category:'バックオフィス', category_en:'Back Office', name:'契約書・文書管理', name_en:'Contract & Document Management', description:'', description_en:'', sort_order:42},
+ {id:'s43', category:'バックオフィス', category_en:'Back Office', name:'PC・ITツール活用', name_en:'PC & IT Tools', description:'Excel・クラウドツール等', description_en:'Excel, cloud tools, etc.', sort_order:43},
+ {id:'s50', category:'共通・マネジメント', category_en:'Core & Management', name:'問題解決・改善提案', name_en:'Problem Solving & Improvement', description:'', description_en:'', sort_order:50},
+ {id:'s51', category:'共通・マネジメント', category_en:'Core & Management', name:'後輩指導・OJT', name_en:'Mentoring & OJT', description:'', description_en:'', sort_order:51},
+ {id:'s52', category:'共通・マネジメント', category_en:'Core & Management', name:'チームマネジメント', name_en:'Team Management', description:'', description_en:'', sort_order:52},
+ {id:'s53', category:'共通・マネジメント', category_en:'Core & Management', name:'コンプライアンス理解', name_en:'Compliance Awareness', description:'個人情報・入管法・労働法の理解', description_en:'Privacy, immigration law, labor law', sort_order:53},
 ];
 
 /* ===== 権限レベル ===== */
@@ -380,6 +393,13 @@ let talentFilter = {q:'', dept:'', nat:'', status:'在籍', size:'m', incFamily:
 /* スキル管理タブの状態 */
 let skillSub = 'map';       // map | input | summary | master
 let skillEmpId = '';        // 入力対象の従業員
+/* スキル画面で英語を併記するか（外国籍スタッフ向け。ブラウザに記憶する） */
+let skillLangEn = (function(){ try{ return localStorage.getItem('kmt-skill-en') !== '0'; }catch(e){ return true; } })();
+function toggleSkillLang(on){
+  skillLangEn = !!on;
+  try{ localStorage.setItem('kmt-skill-en', on?'1':'0'); }catch(e){}
+  render();
+}
 
 function uid(){ return crypto.randomUUID(); }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -802,7 +822,23 @@ function isFamilyRec(e){ return (e.position||'')==='家族（社員外）'; }
 
 /* スキルユーティリティ */
 function skillCats(){ return [...new Set(data.skillDefs.map(s=>s.category))]; }
-function catShort(c){ return c.split('・')[0].slice(0,4); }
+/* カテゴリの英語名（そのカテゴリの最初のスキルの category_en を採用） */
+function catEn(cat){
+  const s = data.skillDefs.find(x=>x.category===cat && x.category_en);
+  return s? s.category_en : '';
+}
+/* レーダーの軸ラベル。英語表示がONなら英語を優先（軸は短く保つ） */
+function catShort(c){
+  if(skillLangEn){
+    const en = catEn(c);
+    if(en) return en.split(/[&,]/)[0].trim().slice(0,12);
+  }
+  return c.split('・')[0].slice(0,4);
+}
+/* 「日本語 <small>English</small>」の形で併記する（英語表示OFF・未入力なら日本語のみ） */
+function jpEn(jp, en, cls){
+  return esc(jp) + (skillLangEn && en? ` <span class="en ${cls||''}">${esc(en)}</span>` : '');
+}
 function skillLevelOf(empId, skillId){
   const m = data.empSkills[empId]; return m && m[skillId] ? m[skillId].level : 0;
 }
@@ -933,12 +969,17 @@ function viewSkills(){
   const subs = [['map','スキルマップ'],['input','個人スキル'],['summary','組織サマリー']];
   if(canEdit()) subs.push(['master','スキルマスタ']);
   if(!subs.some(s=>s[0]===skillSub)) skillSub='map';
+  const lvLegend = Object.entries(SKILL_LEVELS).filter(([k])=>k>0)
+    .map(([k,v])=>`${k}=${v}${skillLangEn?` / ${SKILL_LEVELS_EN[k]}`:''}`).join('　');
   const nav = `<div class="toolbar">
     <div class="viewseg">
-      ${subs.map(([k,l])=>`<button class="${skillSub===k?'active':''}" onclick="skillSub='${k}';render()">${l}</button>`).join('')}
+      ${subs.map(([k,l,e])=>`<button class="${skillSub===k?'active':''}" onclick="skillSub='${k}';render()">${l}</button>`).join('')}
     </div>
+    <label class="langtoggle" title="日本語の横に英語を併記します（外国籍スタッフ向け）">
+      <input type="checkbox" ${skillLangEn?'checked':''} onchange="toggleSkillLang(this.checked)"> 🌐 English
+    </label>
     <div class="spacer"></div>
-    <span class="muted">レベル：${Object.entries(SKILL_LEVELS).filter(([k])=>k>0).map(([k,v])=>`${k}=${v}`).join('　')}</span>
+    <span class="muted">レベル：${lvLegend}</span>
   </div>`;
   let body='';
   if(skillSub==='map') body = skillMapHtml();
@@ -956,9 +997,12 @@ function skillMapHtml(){
   const cats = skillCats();
   const catRow = cats.map(c=>{
     const n = data.skillDefs.filter(s=>s.category===c).length;
-    return `<th class="cat" colspan="${n}">${esc(c)}</th>`; }).join('');
-  const skillRow = data.skillDefs.map(s=>
-    `<th title="${esc(s.description||'')}" style="writing-mode:vertical-rl;text-orientation:mixed;padding:8px 3px;font-weight:600">${esc(s.name)}</th>`).join('');
+    const en = catEn(c);
+    return `<th class="cat" colspan="${n}">${esc(c)}${skillLangEn&&en?`<br><span class="en">${esc(en)}</span>`:''}</th>`; }).join('');
+  const skillRow = data.skillDefs.map(s=>{
+    const tip = [s.name, s.name_en, s.description, s.description_en].filter(Boolean).join(' / ');
+    return `<th title="${esc(tip)}" style="writing-mode:vertical-rl;text-orientation:mixed;padding:8px 3px;font-weight:600">${esc(s.name)}${
+      skillLangEn&&s.name_en?`<span class="en" style="margin-top:4px">${esc(s.name_en)}</span>`:''}</th>`; }).join('');
   const rows = emps.map(e=>{
     const cells = data.skillDefs.map(s=>{
       const lv = skillLevelOf(e.id, s.id);
@@ -992,13 +1036,16 @@ function skillInputHtml(){
       const lv = skillLevelOf(skillEmpId, s.id);
       const seg = [0,1,2,3,4,5].map(n=>
         `<button class="${lv===n?'on':''}" ${editable?`onclick="setSkillLevel('${skillEmpId}','${s.id}',${n})"`:'disabled'}
-          title="${SKILL_LEVELS[n]}">${n||'—'}</button>`).join('');
+          title="${SKILL_LEVELS[n]}${skillLangEn?` / ${SKILL_LEVELS_EN[n]}`:''}">${n||'—'}</button>`).join('');
+      const desc = s.description || (skillLangEn && s.description_en);
       return `<div class="sk-input-row">
-        <span class="skname">${esc(s.name)}${s.description?`<br><span class="muted">${esc(s.description)}</span>`:''}</span>
+        <span class="skname">${jpEn(s.name, s.name_en)}
+          ${desc?`<br><span class="muted">${esc(s.description||'')}${
+            skillLangEn&&s.description_en?`<span class="en" style="margin-left:${s.description?'6px':'0'}">${esc(s.description_en)}</span>`:''}</span>`:''}</span>
         <span class="lvseg">${seg}</span>
       </div>`;
     }).join('');
-    return `<div class="section-title">${esc(cat)}</div>${items}`;
+    return `<div class="section-title">${jpEn(cat, catEn(cat))}</div>${items}`;
   }).join('');
   return `
   <div class="toolbar">
@@ -1030,14 +1077,17 @@ function skillSummaryHtml(){
         .map(x=>`${esc(x.e.nameKanji||x.e.nameRoma)}(${x.lv})`).join('、');
       const risk = !solo.length;
       return `<tr ${risk?'style="background:var(--danger-soft)"':''}>
-        <td>${esc(s.name)}</td>
+        <td>${jpEn(s.name, s.name_en)}</td>
         <td class="center">${avg?avg.toFixed(1):'—'}</td>
-        <td class="center">${solo.length}名 ${risk?'<span class="badge b-red">担い手不足</span>':''}</td>
+        <td class="center">${solo.length}名 ${risk?`<span class="badge b-red">担い手不足${skillLangEn?' / No holder':''}</span>`:''}</td>
         <td class="muted">${top||'—'}</td></tr>`;
     }).join('');
-    return `<div class="section-title">${esc(cat)}</div>
+    return `<div class="section-title">${jpEn(cat, catEn(cat))}</div>
       <div class="tablewrap"><table>
-      <tr><th>スキル</th><th class="center">平均Lv</th><th class="center">独り立ち（Lv3+）</th><th>上位保有者</th></tr>
+      <tr><th>スキル${skillLangEn?' <span class="en">Skill</span>':''}</th>
+        <th class="center">平均Lv${skillLangEn?' <span class="en">Avg</span>':''}</th>
+        <th class="center">独り立ち（Lv3+）${skillLangEn?' <span class="en">Independent</span>':''}</th>
+        <th>上位保有者${skillLangEn?' <span class="en">Top holders</span>':''}</th></tr>
       ${rows}</table></div>`;
   }).join('');
   const rated = emps.filter(e=>empHasSkills(e.id)).length;
@@ -1054,24 +1104,59 @@ function skillSummaryHtml(){
 function skillMasterHtml(){
   if(!canEdit()) return '<div class="muted">スキルマスタの編集には管理者権限が必要です。</div>';
   const cats = skillCats();
+  const missing = data.skillDefs.filter(s=>!s.name_en).length;
+  /* 各セルはその場で編集でき、変更（フォーカスが外れる or Enter）で自動保存する */
+  const cell = (s, field, ph) =>
+    `<input value="${esc(s[field]||'')}" placeholder="${ph}" style="width:100%;min-width:110px"
+      onchange="updateSkillDef('${s.id}','${field}',this.value)">`;
   const rows = data.skillDefs.map(s=>`
-    <tr><td>${esc(s.category)}</td><td><b>${esc(s.name)}</b></td>
-    <td class="muted">${esc(s.description||'')}</td><td>${s.sort_order}</td>
-    <td><button class="btn small danger" onclick="delSkillDef('${s.id}')">削除</button></td></tr>`).join('');
+    <tr>
+      <td>${esc(s.category)}<br>${cell(s,'category_en','English (category)')}</td>
+      <td><b>${esc(s.name)}</b><br>${cell(s,'name_en','English (skill name)')}</td>
+      <td class="muted">${esc(s.description||'—')}<br>${cell(s,'description_en','English (description)')}</td>
+      <td>${s.sort_order}</td>
+      <td><button class="btn small danger" onclick="delSkillDef('${s.id}')">削除</button></td>
+    </tr>`).join('');
   return `
-  <div class="toolbar">
-    <input id="skCat" placeholder="カテゴリ" list="skCatList" style="width:160px">
-    <datalist id="skCatList">${cats.map(c=>`<option value="${esc(c)}">`).join('')}</datalist>
-    <input id="skName" placeholder="スキル名" style="width:180px">
-    <input id="skDesc" placeholder="説明（任意）" style="width:220px">
-    <button class="btn" onclick="addSkillDef()">＋ 追加</button>
+  <div class="fieldset" style="margin-top:0">
+    <legend>新しいスキルを追加</legend>
+    <div class="toolbar" style="margin-bottom:0">
+      <input id="skCat" placeholder="カテゴリ（日本語）" list="skCatList" style="width:150px">
+      <datalist id="skCatList">${cats.map(c=>`<option value="${esc(c)}">`).join('')}</datalist>
+      <input id="skCatEn" placeholder="Category (English)" style="width:150px">
+      <input id="skName" placeholder="スキル名（日本語）" style="width:150px">
+      <input id="skNameEn" placeholder="Skill name (English)" style="width:160px">
+      <input id="skDesc" placeholder="説明（任意）" style="width:150px">
+      <input id="skDescEn" placeholder="Description (English)" style="width:160px">
+      <button class="btn" onclick="addSkillDef()">＋ 追加</button>
+    </div>
+  </div>
+  <div class="toolbar" style="margin-top:12px">
+    <span class="muted">英語欄は直接入力できます（入力後、枠の外をクリックすると自動保存）。
+    ${missing? `<b style="color:var(--danger)">英語未入力：${missing}件</b>`:'英語はすべて入力済みです。'}</span>
     <div class="spacer"></div>
     <button class="btn ghost" onclick="resetSkillDefs()">初期テンプレートに戻す</button>
   </div>
   <div class="tablewrap"><table>
-    <tr><th>カテゴリ</th><th>スキル名</th><th>説明</th><th>順序</th><th></th></tr>${rows}
+    <tr><th>カテゴリ <span class="en">Category</span></th><th>スキル名 <span class="en">Skill</span></th>
+        <th>説明 <span class="en">Description</span></th><th>順序</th><th></th></tr>${rows}
   </table></div>
   <p class="muted" style="margin-top:8px">スキルを削除すると、そのスキルの全社員のレベル記録も削除されます。</p>`;
+}
+/* 英語欄などをその場で保存する */
+async function updateSkillDef(id, field, value){
+  if(!canEdit()){ toast(denyMsg(), true); return; }
+  const s = data.skillDefs.find(x=>x.id===id);
+  if(!s || (s[field]||'') === value) return;
+  const patch = {}; patch[field] = value;
+  await q(sb.from('skill_defs').update(patch).eq('id', id));
+  s[field] = value;
+  /* カテゴリ英語は同じカテゴリ全体に反映させる（表示は先頭行を参照するため） */
+  if(field==='category_en'){
+    data.skillDefs.filter(x=>x.category===s.category).forEach(x=>{ x.category_en = value; });
+    await q(sb.from('skill_defs').update({category_en:value}).eq('category', s.category));
+  }
+  render(); toast('保存しました');
 }
 async function setSkillLevel(empId, skillId, level){
   if(!canEdit()){ toast(denyMsg(), true); return; }
@@ -1082,12 +1167,13 @@ async function setSkillLevel(empId, skillId, level){
   render();
 }
 async function addSkillDef(){
-  const cat = document.getElementById('skCat').value.trim();
-  const name = document.getElementById('skName').value.trim();
-  const desc = document.getElementById('skDesc').value.trim();
+  const v = id => document.getElementById(id).value.trim();
+  const cat = v('skCat'), name = v('skName');
   if(!cat || !name){ toast('カテゴリとスキル名を入力してください', true); return; }
   const maxOrder = Math.max(0, ...data.skillDefs.map(s=>s.sort_order||0));
-  const def = {id:'sk-'+uid().slice(0,8), category:cat, name, description:desc, sort_order:maxOrder+1};
+  const def = {id:'sk-'+uid().slice(0,8), category:cat, name,
+    category_en: v('skCatEn') || catEn(cat), name_en: v('skNameEn'),
+    description: v('skDesc'), description_en: v('skDescEn'), sort_order:maxOrder+1};
   await q(sb.from('skill_defs').insert(def));
   data.skillDefs.push(def);
   render(); toast('スキルを追加しました');
@@ -1313,10 +1399,11 @@ function viewEmpDetail(id){
           const items = data.skillDefs.filter(s=>s.category===cat)
             .map(s=>({s, lv:skillLevelOf(e.id, s.id)})).filter(x=>x.lv>0);
           if(!items.length) return '';
-          return `<div class="section-title">${esc(cat)}</div>
+          return `<div class="section-title">${jpEn(cat, catEn(cat))}</div>
             <div class="tag-row" style="margin-bottom:6px">
             ${items.map(x=>`<span class="badge ${x.lv>=4?'b-green':x.lv>=3?'b-blue':'b-gray'}"
-              title="${SKILL_LEVELS[x.lv]}">${esc(x.s.name)} Lv${x.lv}</span>`).join('')}</div>`;
+              title="${esc(x.s.name_en||x.s.name)} — ${SKILL_LEVELS[x.lv]}${skillLangEn?` / ${SKILL_LEVELS_EN[x.lv]}`:''}">${
+              skillLangEn&&x.s.name_en? esc(x.s.name_en) : esc(x.s.name)} Lv${x.lv}</span>`).join('')}</div>`;
         }).join('')}
         ${navAllowed('skills')?`<button class="btn secondary small" style="margin-top:6px"
           onclick="view='skills';skillSub='input';skillEmpId='${e.id}';render()">スキル管理で開く</button>`:''}
