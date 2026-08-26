@@ -1,4 +1,9 @@
-﻿*.docx
-*.xlsx
-*.pdf
-*.csv
+﻿# ホワイトリスト方式：下記の6ファイル以外は一切コミットさせない
+# （個人情報入りのCSV・Excel等がフォルダに置かれても絶対に公開されないようにするため）
+*
+!.gitignore
+!README.md
+!index.html
+!publish-to-github.ps1
+!supabase-setup.sql
+!sync.ps1
