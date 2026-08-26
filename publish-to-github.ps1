@@ -1,9 +1,12 @@
-# KMT HR System - GitHub公開スクリプト
+﻿# KMT HR System - GitHub公開スクリプト
 # 使い方: PowerShellで  .\publish-to-github.ps1
 # 初回はブラウザでGitHubログインを求められます（画面の指示に従ってください）
 # 2回目以降も同じスクリプトを実行すればOK（push＋Pages確認のみ）
 
-$ErrorActionPreference = 'Stop'
+# 注意: $ErrorActionPreference = 'Stop' は使わない。
+# Windows PowerShell 5.1 では、git/gh が stderr に出す「ただの警告」まで
+# 致命的エラー扱いになり、途中で止まってしまうため。終了コードで判断する。
+$ErrorActionPreference = 'Continue'
 Set-Location $PSScriptRoot
 
 $RepoName = 'kmt-hr-system'
