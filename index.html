@@ -14,9 +14,10 @@
   --radius:10px;
   --sb-w:250px;            /* サイドバー幅 */
   --sb-bg:#fbe5dc;         /* サイドバー背景（ピンク薄） */
-  --sb-deep:#c05134;       /* セクション見出し（ピンク濃いめ） */
-  --sb-deep2:#d4603c;      /* セクション見出しホバー */
-  --sb-head:#b8492e;       /* ブランドカードのピンク */
+  --sb-deep:#f9d0b8;       /* セクション見出し（ピーチ） */
+  --sb-deep2:#f5c0a2;      /* セクション見出しホバー（少し濃いピーチ） */
+  --sb-head:#fbd9c4;       /* ブランドカード（ピーチ） */
+  --sb-on-deep:#7a3520;    /* ピーチ地の上の文字色。白だと読めないため濃い茶にする */
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:"Hiragino Kaku Gothic ProN","Yu Gothic UI","Meiryo",sans-serif;background:var(--bg);color:var(--text);font-size:14px}
@@ -28,11 +29,11 @@ aside#sidebar{width:var(--sb-w);flex-shrink:0;background:var(--sb-bg);border-rig
 .content{flex:1;min-width:0;display:flex;flex-direction:column}
 main{width:100%;max-width:1280px;margin:0 auto;padding:20px;flex:1}
 /* ブランドカード */
-.sb-brand{background:linear-gradient(160deg,var(--sb-head),#b8492e);border-radius:14px;padding:14px 12px;text-align:center;color:#fff;margin-bottom:10px}
+.sb-brand{background:linear-gradient(160deg,var(--sb-head),#f5c0a2);border-radius:14px;padding:14px 12px;text-align:center;color:var(--sb-on-deep);margin-bottom:10px}
 .sb-brand .logo{background:#fff;border-radius:10px;width:64px;height:64px;margin:0 auto 8px;display:flex;align-items:center;justify-content:center;
   color:var(--accent);font-weight:900;font-size:20px;letter-spacing:1px;box-shadow:0 2px 8px rgba(0,0,0,.15)}
 .sb-brand h1{font-size:15px;font-weight:800;line-height:1.4}
-.sb-brand .ver{font-size:10px;opacity:.9;text-decoration:underline;margin-top:2px;display:inline-block;color:#fff}
+.sb-brand .ver{font-size:10px;opacity:.85;text-decoration:underline;margin-top:2px;display:inline-block;color:var(--sb-on-deep)}
 /* ユーザー行 */
 .sb-user{display:flex;align-items:center;gap:6px;font-size:12px;padding:4px 6px;margin-bottom:8px}
 .sb-user .dot{width:8px;height:8px;border-radius:50%;background:#2ecc71;flex-shrink:0}
@@ -69,11 +70,11 @@ main{width:100%;max-width:1280px;margin:0 auto;padding:20px;flex:1}
 .ann-item.unread .t{color:var(--text);font-weight:700}
 /* メニューグループ */
 .sb-group{margin-bottom:6px}
-.sb-group>button{width:100%;display:flex;align-items:center;gap:8px;background:var(--sb-deep);border:none;color:#fff;
+.sb-group>button{width:100%;display:flex;align-items:center;gap:8px;background:var(--sb-deep);border:none;color:var(--sb-on-deep);
   padding:9px 12px;border-radius:9px;cursor:pointer;font-size:13px;font-weight:800}
 .sb-group>button:hover{background:var(--sb-deep2)}
 .sb-group>button .arrow{font-size:10px;width:12px}
-.sb-group>button .gcnt{margin-left:auto;background:rgba(255,255,255,.3);border-radius:999px;padding:1px 8px;font-size:11px}
+.sb-group>button .gcnt{margin-left:auto;background:rgba(122,53,32,.14);border-radius:999px;padding:1px 8px;font-size:11px}
 .sb-items{padding:4px 0 2px}
 .sb-item{width:100%;display:flex;align-items:center;gap:8px;background:transparent;border:none;text-align:left;
   padding:8px 10px 8px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;color:var(--text)}
