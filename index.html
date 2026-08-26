@@ -52,6 +52,21 @@ main{width:100%;max-width:1280px;margin:0 auto;padding:20px;flex:1}
 .sb-alert .cnt.y{background:var(--warn)}
 .sb-alert .cnt.z{background:#c8ccd4}
 .sb-alert .sub-row{display:flex;justify-content:space-between;font-size:11px;color:var(--sub);padding:1px 0 1px 14px}
+/* 更新通知バナー */
+.sb-update{background:var(--ok-soft);border:1px solid #b6dfc7;color:var(--ok);border-radius:10px;
+  padding:8px 10px;margin-bottom:8px;cursor:pointer;font-size:12px;line-height:1.5}
+.sb-update:hover{filter:brightness(.97)}
+.sb-update b{display:block;font-size:12px}
+/* アナウンス確認カード */
+.sb-ann{background:#fff;border:1px solid var(--border);border-radius:10px;padding:8px 10px;margin-bottom:8px;font-size:12px}
+.sb-ann-head{display:flex;align-items:center;gap:6px;font-weight:800;margin-bottom:4px}
+.sb-ann-head .cnt{background:var(--danger);color:#fff;border-radius:999px;font-size:11px;padding:1px 8px}
+.sb-ann-head .cnt.z{background:#c8ccd4}
+.sb-ann-head a{margin-left:auto;color:var(--accent);text-decoration:none;font-size:15px;line-height:1}
+.ann-item{display:flex;align-items:center;gap:6px;padding:4px 2px;cursor:pointer;border-radius:6px}
+.ann-item:hover{background:var(--accent-soft)}
+.ann-item .t{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--sub)}
+.ann-item.unread .t{color:var(--text);font-weight:700}
 /* メニューグループ */
 .sb-group{margin-bottom:6px}
 .sb-group>button{width:100%;display:flex;align-items:center;gap:8px;background:var(--sb-deep);border:none;color:#fff;
@@ -187,6 +202,12 @@ th .en{display:block;font-weight:400}
 .task-line.edit input{flex:1;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:#fff}
 .task-line.edit input.task-en{flex:0.8;color:var(--sub)}
 .task-line .tno{color:var(--sub);width:18px;text-align:right;flex-shrink:0}
+.lvseg.tasklv button{width:26px;height:23px;font-size:11px}
+/* スキル本体に表示する「タスク平均点」 */
+.avgbox{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:56px;
+  border-radius:8px;padding:3px 6px;line-height:1.2}
+.avgbox b{font-size:15px}
+.avgbox span{font-size:10px;opacity:.8}
 .legend-dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
 footer{text-align:center;color:var(--sub);font-size:11px;padding:16px}
 #toast{position:fixed;bottom:18px;right:18px;background:#12325e;color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;display:none;z-index:99;box-shadow:0 8px 24px rgba(0,0,0,.3)}
@@ -335,7 +356,9 @@ const ROLE_DESC = {
   '全体管理':'すべての操作＋利用ユーザーの追加・権限変更ができます。',
 };
 /* 書き込みに必要な最低ランク（テーブル別） */
-const WRITE_RANK = {allowed_users:3, departments:2, doc_templates:2, employees:2, employee_docs:2, evaluations:2, kpis:2, assets:2};
+const WRITE_RANK = {allowed_users:3, departments:2, doc_templates:2, employees:2, employee_docs:2, evaluations:2, kpis:2, assets:2,
+  announcements:2,        // お知らせの投稿・削除は管理者以上
+  announcement_reads:1};  // 「確認しました」は本人（社員以上）が記録する
 
 /* ===== 評価シート2026新版 マスタ ===== */
 const EVAL_ROLES = {
@@ -393,7 +416,7 @@ const KPI_LIBRARY = [
 ];
 
 /* ---------------- state ---------------- */
-let data = {departments:[], employees:[], evaluations:[], kpis:[], assets:[], docTemplates:[], allowedUsers:[], skillDefs:[], empSkills:{}};
+let data = {departments:[], employees:[], evaluations:[], kpis:[], assets:[], docTemplates:[], allowedUsers:[], skillDefs:[], empSkills:{}, announcements:[], annReads:[]};
 let session = null;
 let view = 'dashboard';
 let empFilter = {q:'', status:'在籍', type:'', dept:''};
@@ -521,7 +544,7 @@ function dbToAsset(r){ return {id:r.id, assetNo:r.asset_no, category:r.category,
 function assetToDb(a){ return {id:a.id, asset_no:a.assetNo||'', category:a.category, name:a.name, serial:a.serial||'', purchase_date:dOrNull(a.purchaseDate), price:a.price||'', status:a.status, assigned_to:dOrNull(a.assignedTo), lend_date:dOrNull(a.lendDate), return_date:dOrNull(a.returnDate), notes:a.notes||''}; }
 
 async function loadAll(){
-  const [deps, tpls, emps, docs, evals, kpis, assets, allowed, skdefs, esk] = await Promise.all([
+  const [deps, tpls, emps, docs, evals, kpis, assets, allowed, skdefs, esk, anns, reads] = await Promise.all([
     q(sb.from('departments').select('*').order('sort_order')),
     q(sb.from('doc_templates').select('*').order('sort_order')),
     q(sb.from('employees').select('*')),
@@ -532,12 +555,16 @@ async function loadAll(){
     q(sb.from('allowed_users').select('*').order('added_at')),
     q(sb.from('skill_defs').select('*').order('sort_order')),
     q(sb.from('employee_skills').select('*')),
+    q(sb.from('announcements').select('*').order('created_at', {ascending:false})),
+    q(sb.from('announcement_reads').select('*')),
   ]);
+  data.announcements = anns;
+  data.annReads = reads;
   data.skillDefs = skdefs;
   data.empSkills = {};
   esk.forEach(r=>{
     if(!data.empSkills[r.employee_id]) data.empSkills[r.employee_id] = {};
-    data.empSkills[r.employee_id][r.skill_id] = {level:r.level, note:r.note||''};
+    data.empSkills[r.employee_id][r.skill_id] = {level:r.level, note:r.note||'', taskLevels:r.task_levels||{}};
   });
   data.departments = deps.map(d=>d.name);
   data._deptRows = deps;
@@ -644,6 +671,16 @@ async function start(){
   await autoSeed();
   if(!navAllowed(view)) view='dashboard';
   render();
+  startVersionWatch();
+}
+/* 更新の見張り：起動30秒後・以降10分ごと・タブに戻ったときに確認する */
+let verWatchStarted = false;
+function startVersionWatch(){
+  if(verWatchStarted) return;
+  verWatchStarted = true;
+  setTimeout(checkAppVersion, 30000);
+  setInterval(checkAppVersion, 10*60*1000);
+  window.addEventListener('focus', ()=>{ if(!newVerAvailable) checkAppVersion(); });
 }
 /* 新しいDBで初回ログインしたとき、書類マスタと部署マスタを自動投入する */
 async function autoSeed(){
@@ -734,8 +771,122 @@ function navAllowed(key){
   return !!it && myRank() >= it[2];
 }
 
+/* ================= お知らせ・更新通知 ================= */
+/* --- 1) アプリの更新検知 ---
+   公開中のindex.htmlを取得して APP_VER を比べる。変わっていれば「新しいバージョン」を案内する。
+   （GitHub Pagesは静的配信のため、ページ自身を読み直すのが最も確実） */
+let newVerAvailable = '';
+async function checkAppVersion(){
+  try{
+    const res = await fetch(location.pathname + '?vcheck=' + Date.now(), {cache:'no-store'});
+    if(!res.ok) return;
+    const txt = await res.text();
+    const m = txt.match(/APP_VER\s*=\s*'([^']+)'/);
+    if(m && m[1] && m[1] !== APP_VER){
+      if(newVerAvailable !== m[1]){ newVerAvailable = m[1]; renderNav(); toast('新しいバージョンがあります'); }
+    }
+  }catch(e){ /* オフライン等は無視して次回に任せる */ }
+}
+function applyUpdate(){ location.reload(); }
+
+/* --- 2) お知らせ（管理者が投稿、利用者ごとに既読管理） --- */
+function annVisible(){
+  return (data.announcements||[]).filter(a=>a.active);
+}
+function annIsRead(id){
+  const em = myEmail();
+  return (data.annReads||[]).some(r=>r.announcement_id===id && (r.email||'').toLowerCase()===em);
+}
+function annUnread(){ return annVisible().filter(a=>!annIsRead(a.id)); }
+const ANN_LEVELS = {
+  info:      {label:'お知らせ',   badge:'b-blue'},
+  important: {label:'重要',       badge:'b-red'},
+  update:    {label:'アップデート', badge:'b-green'},
+};
+async function openAnn(id){
+  const a = annVisible().find(x=>x.id===id); if(!a) return;
+  const lv = ANN_LEVELS[a.level]||ANN_LEVELS.info;
+  modal(`
+    <h3><span class="badge ${lv.badge}">${lv.label}</span> ${esc(a.title)}</h3>
+    <div class="muted" style="margin-bottom:10px">${esc((a.created_at||'').slice(0,16).replace('T',' '))}
+      ${a.created_by?` ・ ${esc(a.created_by)}`:''}</div>
+    <div style="white-space:pre-wrap;line-height:1.7;font-size:13px">${esc(a.body)}</div>
+    <div class="modal-actions">
+      ${canEdit()?`<button class="btn ghost" onclick="delAnn('${a.id}')">削除</button>`:''}
+      <button class="btn secondary" onclick="closeModal()">閉じる</button>
+      ${annIsRead(a.id)?'<span class="badge b-green" style="align-self:center">確認済</span>'
+        :`<button class="btn" onclick="markAnnRead('${a.id}')">確認しました</button>`}
+    </div>`);
+}
+async function markAnnRead(id){
+  const em = myEmail();
+  if(annIsRead(id)){ closeModal(); return; }
+  await q(sb.from('announcement_reads').upsert({announcement_id:id, email:em}));
+  data.annReads.push({announcement_id:id, email:em, read_at:new Date().toISOString()});
+  closeModal(); render(); toast('確認しました');
+}
+function openAnnForm(){
+  if(!canEdit()){ toast(denyMsg(), true); return; }
+  modal(`
+    <h3>お知らせを投稿</h3>
+    <div class="formgrid">
+      <div style="grid-column:1/-1"><label>件名</label>
+        <input id="an_title" placeholder="例：【お願い】在留カードの提出について"></div>
+      <div><label>種別</label>
+        <select id="an_level">
+          <option value="info">お知らせ</option>
+          <option value="important">重要</option>
+          <option value="update">アップデート</option>
+        </select></div>
+    </div>
+    <div class="field" style="margin-top:10px"><label>本文</label>
+      <textarea id="an_body" rows="7" placeholder="本文を入力してください。&#10;外国籍スタッフ向けに、やさしい日本語や英語の併記を推奨します。"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">キャンセル</button>
+      <button class="btn" onclick="saveAnn()">投稿する</button>
+    </div>`);
+}
+async function saveAnn(){
+  const title = document.getElementById('an_title').value.trim();
+  const body  = document.getElementById('an_body').value.trim();
+  const level = document.getElementById('an_level').value;
+  if(!title){ toast('件名を入力してください', true); return; }
+  const row = {title, body, level, active:true, created_by:(myUser()||{}).name || myEmail()};
+  const ins = await q(sb.from('announcements').insert(row).select());
+  if(ins && ins[0]) data.announcements.unshift(ins[0]);
+  closeModal(); render(); toast('お知らせを投稿しました');
+}
+async function delAnn(id){
+  if(!canEdit()){ toast(denyMsg(), true); return; }
+  if(!confirm('このお知らせを削除しますか？')) return;
+  await q(sb.from('announcements').delete().eq('id', id));
+  data.announcements = data.announcements.filter(a=>a.id!==id);
+  closeModal(); render(); toast('削除しました');
+}
+
+/* サイドバーの「アナウンス確認」カード */
+function annCardHtml(){
+  const list = annVisible().slice(0, 5);
+  const unread = annUnread().length;
+  return `
+  <div class="sb-ann">
+    <div class="sb-ann-head">
+      <span>📢 アナウンス確認</span>
+      ${unread? `<span class="cnt">${unread}</span>` : '<span class="cnt z">0</span>'}
+      ${canEdit()? `<a href="javascript:openAnnForm()" title="お知らせを投稿">＋</a>`:''}
+    </div>
+    ${list.length? list.map(a=>{
+      const read = annIsRead(a.id);
+      return `<div class="ann-item ${read?'':'unread'}" onclick="openAnn('${a.id}')" title="${esc(a.title)}">
+        <span class="t">${esc(a.title)}</span>
+        <span class="badge ${read?'b-green':'b-yellow'}">${read?'確認済':'未読'}</span>
+      </div>`; }).join('')
+      : '<div class="muted" style="padding:4px 2px">お知らせはありません。</div>'}
+  </div>`;
+}
+
 /* ===== サイドバー（ピンク基調・グループ折りたたみ式） ===== */
-const APP_VER = 'ver.20260827.1';
+const APP_VER = 'ver.20260827.2';
 const NAV_GROUPS = [
   {key:'jinzai', label:'人材管理',   items:[['talent','👥','タレント'],['employees','🗂','従業員・人事情報'],['skills','🧭','スキル管理'],['evals','📝','評価管理']]},
   {key:'romu',   label:'労務・書類', items:[['docs','📄','労務・書類管理'],['guide','📘','手続きガイド']]},
@@ -791,6 +942,12 @@ function renderNav(){
       <div class="sub-row"><span>🔴 要対応</span><span>${red}</span></div>
       <div class="sub-row"><span>🟡 注意（90日以内など）</span><span>${yel}</span></div>
     </div>`:''}
+    ${newVerAvailable? `
+    <div class="sb-update" onclick="applyUpdate()" title="クリックで再読み込みします">
+      <b>🔄 新しいバージョンがあります</b>
+      <div>${esc(newVerAvailable)} ・ クリックで更新</div>
+    </div>`:''}
+    ${myRank()>=1? annCardHtml() : ''}
     <div class="sb-single">
       <button class="sb-item ${view==='dashboard'?'active':''}" onclick="go('dashboard')">
         <span class="ic">🏠</span>ダッシュボード</button>
@@ -884,9 +1041,29 @@ function catShort(c){
 function jpEn(jp, en, cls){
   return esc(jp) + (skillLangEn && en? ` <span class="en ${cls||''}">${esc(en)}</span>` : '');
 }
-function skillLevelOf(empId, skillId){
-  const m = data.empSkills[empId]; return m && m[skillId] ? m[skillId].level : 0;
+/* タスクごとの評価（0=未評価, 1〜5） */
+function taskLevelOf(empId, skillId, taskId){
+  const m = data.empSkills[empId];
+  const tl = m && m[skillId] ? (m[skillId].taskLevels||{}) : {};
+  return tl[taskId] || 0;
 }
+/* スキルの点数。タスクがあるスキルは「評価済タスクの平均」で決まる。
+   タスクが無いスキルは従来どおり直接入力した値を使う。 */
+function skillScore(empId, skillId){
+  const s = data.skillDefs.find(x=>x.id===skillId);
+  const tasks = (s && s.tasks) || [];
+  if(tasks.length){
+    const lv = tasks.map(t=>taskLevelOf(empId, skillId, t.id)).filter(v=>v>0);
+    return {avg: lv.length? lv.reduce((a,b)=>a+b,0)/lv.length : 0,
+            rated: lv.length, total: tasks.length, byTask:true};
+  }
+  const m = data.empSkills[empId];
+  const direct = m && m[skillId] ? m[skillId].level : 0;
+  return {avg: direct, rated: direct?1:0, total: 1, byTask:false};
+}
+/* 表示・集計用の点数（小数のまま）。色分けは Math.round して使う。 */
+function skillLevelOf(empId, skillId){ return skillScore(empId, skillId).avg; }
+function fmtScore(v){ return v? (Number.isInteger(v)? String(v) : v.toFixed(1)) : '—'; }
 function catAverages(empId){
   return skillCats().map(cat=>{
     const defs = data.skillDefs.filter(s=>s.category===cat);
@@ -1050,8 +1227,11 @@ function skillMapHtml(){
       skillLangEn&&s.name_en?`<span class="en" style="margin-top:4px">${esc(s.name_en)}</span>`:''}</th>`; }).join('');
   const rows = emps.map(e=>{
     const cells = data.skillDefs.map(s=>{
-      const lv = skillLevelOf(e.id, s.id);
-      return `<td><span class="sklv lv${lv}" title="${esc(s.name)}：${SKILL_LEVELS[lv]}">${lv||'—'}</span></td>`;
+      const sc = skillScore(e.id, s.id);
+      const r = Math.round(sc.avg);
+      const tip = `${s.name}：${sc.avg? SKILL_LEVELS[r] : '未評価'}` +
+                  (sc.byTask? `（評価済タスク ${sc.rated}/${sc.total}）` : '');
+      return `<td><span class="sklv lv${r}" title="${esc(tip)}">${fmtScore(sc.avg)}</span></td>`;
     }).join('');
     return `<tr>
       <td class="namecell"><a href="javascript:void(0)" onclick="skillSub='input';skillEmpId='${e.id}';render()" style="display:flex;align-items:center;gap:6px;text-decoration:none;color:inherit">
@@ -1060,7 +1240,7 @@ function skillMapHtml(){
   const avgCells = data.skillDefs.map(s=>{
     const withLv = emps.map(e=>skillLevelOf(e.id,s.id)).filter(v=>v>0);
     const avg = withLv.length? (withLv.reduce((a,b)=>a+b,0)/withLv.length) : 0;
-    return `<td class="muted" style="font-weight:700">${avg?avg.toFixed(1):'—'}</td>`; }).join('');
+    return `<td class="muted" style="font-weight:700">${fmtScore(avg)}</td>`; }).join('');
   return `<div class="tablewrap"><table class="skmap">
     <tr><th class="namecell" style="background:#eef2f7"></th>${catRow}</tr>
     <tr><th class="namecell" style="background:#eef2f7">氏名</th>${skillRow}</tr>
@@ -1078,19 +1258,23 @@ function skillInputHtml(){
   const cats = skillCats();
   const rows = cats.map(cat=>{
     const items = data.skillDefs.filter(s=>s.category===cat).map(s=>{
-      const lv = skillLevelOf(skillEmpId, s.id);
-      const seg = [0,1,2,3,4,5].map(n=>
-        `<button class="${lv===n?'on':''}" ${editable?`onclick="setSkillLevel('${skillEmpId}','${s.id}',${n})"`:'disabled'}
-          title="${SKILL_LEVELS[n]}${skillLangEn?` / ${SKILL_LEVELS_EN[n]}`:''}">${n||'—'}</button>`).join('');
+      const sc = skillScore(skillEmpId, s.id);
       const desc = s.description || (skillLangEn && s.description_en);
       const tasks = s.tasks||[];
       const open = !!skillTaskOpen[s.id];
+      /* タスクがあるスキルは平均点を表示（タスク側で採点）。無いスキルは従来の直接入力。 */
+      const right = tasks.length
+        ? `<span class="avgbox ${sc.avg?`lv${Math.round(sc.avg)}`:'lv0'}" title="評価済タスク ${sc.rated}/${sc.total} 件の平均">
+             <b>${fmtScore(sc.avg)}</b><span>${sc.rated}/${sc.total}</span></span>`
+        : `<span class="lvseg">${[0,1,2,3,4,5].map(n=>
+             `<button class="${sc.avg===n?'on':''}" ${editable?`onclick="setSkillLevel('${skillEmpId}','${s.id}',${n})"`:'disabled'}
+               title="${SKILL_LEVELS[n]}${skillLangEn?` / ${SKILL_LEVELS_EN[n]}`:''}">${n||'—'}</button>`).join('')}</span>`;
       return `<div class="sk-input-row">
         <span class="skname">${jpEn(s.name, s.name_en)}
           <a class="task-toggle" href="javascript:toggleTasks('${s.id}')">${open?'▾':'▸'} タスク${tasks.length}${skillLangEn?` <span class="en">tasks</span>`:''}</a>
           ${desc?`<br><span class="muted">${esc(s.description||'')}${
             skillLangEn&&s.description_en?`<span class="en" style="margin-left:${s.description?'6px':'0'}">${esc(s.description_en)}</span>`:''}</span>`:''}</span>
-        <span class="lvseg">${seg}</span>
+        ${right}
       </div>${open? taskBlockHtml(s) : ''}`;
     }).join('');
     return `<div class="section-title">${jpEn(cat, catEn(cat))}</div>${items}`;
@@ -1212,27 +1396,60 @@ async function updateSkillDef(id, field, value){
 /* スキル配下のタスクリスト。管理者はその場で追加・編集・削除できる */
 function taskBlockHtml(s){
   const tasks = s.tasks||[];
-  if(!canEdit()){
+  const editable = canEdit();
+  /* タスクごとの 1〜5 採点ボタン（0=未評価に戻す） */
+  const scoreSeg = t => `<span class="lvseg tasklv">${[0,1,2,3,4,5].map(n=>{
+      const lv = taskLevelOf(skillEmpId, s.id, t.id);
+      return `<button class="${lv===n?'on':''}" ${editable?`onclick="setTaskLevel('${s.id}','${t.id}',${n})"`:'disabled'}
+        title="${SKILL_LEVELS[n]}${skillLangEn?` / ${SKILL_LEVELS_EN[n]}`:''}">${n||'—'}</button>`;
+    }).join('')}</span>`;
+  if(!tasks.length){
     return `<div class="task-block">
-      ${tasks.map(t=>`<div class="task-line">・${esc(t.jp)}${skillLangEn&&t.en?` <span class="en">${esc(t.en)}</span>`:''}</div>`).join('')
-        || '<div class="muted">タスクは登録されていません。</div>'}
+      ${editable? `<div class="task-line edit">
+        <span class="tno">＋</span>
+        <input id="newTaskJp-${s.id}" placeholder="新しいタスク（日本語）">
+        <input id="newTaskEn-${s.id}" placeholder="English (optional)" class="task-en">
+        <button class="btn small" onclick="addTask('${s.id}')">追加</button>
+      </div>` : '<div class="muted">タスクは登録されていません。</div>'}
     </div>`;
   }
   return `<div class="task-block">
     ${tasks.map((t,i)=>`
       <div class="task-line edit">
         <span class="tno">${i+1}.</span>
-        <input value="${esc(t.jp)}" placeholder="タスク（日本語）" onchange="updateTask('${s.id}',${i},'jp',this.value)">
-        <input value="${esc(t.en||'')}" placeholder="English" class="task-en" onchange="updateTask('${s.id}',${i},'en',this.value)">
-        <button class="btn small ghost" title="削除" onclick="delTask('${s.id}',${i})">✕</button>
+        ${editable
+          ? `<input value="${esc(t.jp)}" placeholder="タスク（日本語）" onchange="updateTask('${s.id}',${i},'jp',this.value)">
+             <input value="${esc(t.en||'')}" placeholder="English" class="task-en" onchange="updateTask('${s.id}',${i},'en',this.value)">`
+          : `<span style="flex:1">${esc(t.jp)}</span>
+             ${skillLangEn&&t.en?`<span class="en" style="flex:0.8">${esc(t.en)}</span>`:''}`}
+        ${scoreSeg(t)}
+        ${editable?`<button class="btn small ghost" title="削除" onclick="delTask('${s.id}',${i})">✕</button>`:''}
       </div>`).join('')}
-    <div class="task-line edit">
+    ${editable? `<div class="task-line edit">
       <span class="tno">＋</span>
       <input id="newTaskJp-${s.id}" placeholder="新しいタスク（日本語）">
       <input id="newTaskEn-${s.id}" placeholder="English (optional)" class="task-en">
       <button class="btn small" onclick="addTask('${s.id}')">追加</button>
-    </div>
+    </div>`:''}
   </div>`;
+}
+/* タスクの点数を保存し、スキル本体の平均も再計算して保存する */
+async function setTaskLevel(skillId, taskId, level){
+  if(!canEdit()){ toast(denyMsg(), true); return; }
+  const empId = skillEmpId;
+  if(!data.empSkills[empId]) data.empSkills[empId] = {};
+  const cur = data.empSkills[empId][skillId] || {level:0, note:'', taskLevels:{}};
+  const tl = Object.assign({}, cur.taskLevels||{});
+  if(level>0) tl[taskId] = level; else delete tl[taskId];
+  /* スキル本体の level には平均を四捨五入して入れる（集計や旧データとの互換のため） */
+  const s = data.skillDefs.find(x=>x.id===skillId);
+  const vals = ((s&&s.tasks)||[]).map(t=>tl[t.id]||0).filter(v=>v>0);
+  const avg = vals.length? vals.reduce((a,b)=>a+b,0)/vals.length : 0;
+  const rounded = Math.round(avg);
+  await q(sb.from('employee_skills').upsert(
+    {employee_id:empId, skill_id:skillId, level:rounded, task_levels:tl, updated_at:new Date().toISOString()}));
+  data.empSkills[empId][skillId] = {level:rounded, note:cur.note||'', taskLevels:tl};
+  render();
 }
 async function saveTasks(skillId){
   const s = data.skillDefs.find(x=>x.id===skillId); if(!s) return;
@@ -1253,7 +1470,10 @@ async function addTask(skillId){
   if(!jp){ toast('タスク（日本語）を入力してください', true); return; }
   const s = data.skillDefs.find(x=>x.id===skillId); if(!s) return;
   s.tasks = s.tasks||[];
-  s.tasks.push({jp, en});
+  /* 既存IDと衝突しない連番IDを付ける（採点はこのIDに紐づく） */
+  let n = s.tasks.length + 1;
+  while(s.tasks.some(t=>t.id === s.id+'-t'+n)) n++;
+  s.tasks.push({id: s.id+'-t'+n, jp, en});
   await saveTasks(skillId);
   render(); toast('タスクを追加しました');
 }
@@ -1296,7 +1516,10 @@ async function delSkillDef(id){
 }
 async function resetSkillDefs(){
   if(!confirm('スキルマスタを初期テンプレート（23項目・タスク付き）に戻しますか？\n追加した独自スキルと、そのレベル記録は削除されます。')) return;
-  const defs = DEFAULT_SKILL_DEFS.map(s=>Object.assign({}, s, {tasks: DEFAULT_SKILL_TASKS[s.id]||[]}));
+  /* タスクには安定したIDを振る（採点はこのIDに紐づくため） */
+  const defs = DEFAULT_SKILL_DEFS.map(s=>Object.assign({}, s, {
+    tasks: (DEFAULT_SKILL_TASKS[s.id]||[]).map((t,i)=>({id:`${s.id}-t${i+1}`, jp:t.jp, en:t.en}))
+  }));
   await q(sb.from('skill_defs').delete().neq('id',''));
   await q(sb.from('skill_defs').insert(defs));
   await loadAll(); render(); toast('初期テンプレートに戻しました');
@@ -2292,6 +2515,29 @@ function viewData(){
     ${canAdmin()?'<button class="btn small secondary" style="margin-top:8px" onclick="go(\'users\')">ユーザー管理を開く</button>':''}
   </div>
   <div class="panel">
+    <h2>お知らせ管理 <span class="en">Announcements — サイドバーの「アナウンス確認」に表示されます</span></h2>
+    <div class="toolbar">
+      <button class="btn" onclick="openAnnForm()">＋ お知らせを投稿</button>
+      <div class="spacer"></div>
+      <span class="muted">現在の公開数：${annVisible().length}件</span>
+    </div>
+    <div class="tablewrap"><table>
+      <tr><th>日付</th><th>種別</th><th>件名</th><th>既読</th><th></th></tr>
+      ${(data.announcements||[]).map(a=>{
+        const lv = ANN_LEVELS[a.level]||ANN_LEVELS.info;
+        const reads = (data.annReads||[]).filter(r=>r.announcement_id===a.id).length;
+        const targets = data.allowedUsers.filter(u=>u.role!=='ゲスト').length;
+        return `<tr class="clickable" onclick="openAnn('${a.id}')">
+          <td>${esc((a.created_at||'').slice(0,10))}</td>
+          <td><span class="badge ${lv.badge}">${lv.label}</span></td>
+          <td><b>${esc(a.title)}</b>${a.active?'':' <span class="badge b-gray">非公開</span>'}</td>
+          <td>${reads}/${targets}名</td>
+          <td><button class="btn small ghost" onclick="event.stopPropagation();delAnn('${a.id}')">削除</button></td>
+        </tr>`; }).join('') || '<tr><td colspan="5" class="muted">お知らせはまだありません。</td></tr>'}
+    </table></div>
+    <p class="muted" style="margin-top:8px">アプリを更新（push）すると、利用者の画面に自動で「新しいバージョンがあります」が表示されます（最大10分以内）。手動の連絡はここから投稿してください。</p>
+  </div>
+  <div class="panel">
     <h2>部署マスタ</h2>
     <div class="toolbar">
       <input id="newDept" placeholder="新しい部署名">
@@ -2460,7 +2706,9 @@ async function importJson(){
       const skRows = [];
       Object.entries(d.empSkills||{}).forEach(([empId, m])=>{
         Object.entries(m).forEach(([skillId, v])=>{
-          if(v.level>0) skRows.push({employee_id:mapId(empId), skill_id:skillId, level:v.level, note:v.note||''});
+          const tl = v.taskLevels||{};
+          if(v.level>0 || Object.keys(tl).length)
+            skRows.push({employee_id:mapId(empId), skill_id:skillId, level:v.level||0, note:v.note||'', task_levels:tl});
         });
       });
       if(skRows.length) await q(sb.from('employee_skills').insert(skRows));

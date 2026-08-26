@@ -157,6 +157,9 @@ create table if not exists public.employee_skills (
   updated_at  timestamptz not null default now(),
   primary key (employee_id, skill_id)
 );
+-- タスクごとの評価 {taskId: 1〜5}。スキル本体の点数はこの平均で決まる
+-- （level 列には四捨五入した平均が入る）
+alter table public.employee_skills add column if not exists task_levels jsonb not null default '{}'::jsonb;
 
 grant usage on schema public to anon, authenticated;
 grant select, insert, update, delete on all tables in schema public to authenticated;
