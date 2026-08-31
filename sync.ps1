@@ -18,6 +18,25 @@ function Invoke-Git {
     return $LASTEXITCODE
 }
 
+# バージョン番号を自動で上げる。
+# これを忘れると、利用者の画面に「新しいバージョンがあります」が一切出ない
+# （手動更新にしていた間、6回のデプロイで一度も通知が出ていなかった）。
+function Bump-Version {
+    $file = Join-Path $PSScriptRoot 'index.html'
+    if (-not (Test-Path $file)) { return $null }
+    $txt = [System.IO.File]::ReadAllText($file, [System.Text.UTF8Encoding]::new($false))
+    # コミット数＋1 を使う。必ず増えるので重複しない
+    $n   = [int](& git rev-list --count HEAD) + 1
+    $ver = "ver.$(Get-Date -Format 'yyyyMMdd').$n"
+    $new = [regex]::Replace($txt, "const APP_VER = '[^']*';", "const APP_VER = '$ver';")
+    if ($new -ne $txt) {
+        [System.IO.File]::WriteAllText($file, $new, [System.Text.UTF8Encoding]::new($false))
+        Write-Host "バージョンを $ver に更新しました" -ForegroundColor DarkGray
+        return $ver
+    }
+    return $null
+}
+
 # 変更が無ければコミットしない
 $changes = & git status --porcelain
 if (-not $changes) {
@@ -25,6 +44,7 @@ if (-not $changes) {
 } else {
     Write-Host "以下の変更をコミットします:" -ForegroundColor Cyan
     & git status --short
+    $newVer = Bump-Version
     if (-not $Message) {
         $Message = "Update KMT HR system ($(Get-Date -Format 'yyyy-MM-dd HH:mm'))"
     }

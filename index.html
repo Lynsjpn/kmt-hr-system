@@ -53,7 +53,20 @@ main{width:100%;max-width:1280px;margin:0 auto;padding:20px;flex:1}
 .sb-alert .cnt.y{background:var(--warn)}
 .sb-alert .cnt.z{background:#ccc3bf}
 .sb-alert .sub-row{display:flex;justify-content:space-between;font-size:11px;color:var(--sub);padding:1px 0 1px 14px}
-/* 更新通知バナー */
+/* 画面上部の更新バナー（見落とし防止のため大きく出す） */
+.update-banner{position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:12px;
+  background:linear-gradient(100deg,#1e7e4e,#2f9e69);color:#fff;border-radius:10px;
+  padding:12px 16px;margin-bottom:14px;cursor:pointer;box-shadow:0 4px 16px rgba(30,126,78,.3);
+  animation:banner-in .3s ease-out}
+@keyframes banner-in{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+.update-banner .ic{font-size:22px;flex-shrink:0}
+.update-banner .txt{flex:1;line-height:1.5;min-width:0}
+.update-banner .txt b{display:block;font-size:14px}
+.update-banner .txt span{font-size:12px;opacity:.92}
+.update-banner .btn{background:#fff;color:var(--ok);flex-shrink:0;font-weight:800}
+.update-banner .btn:hover{filter:brightness(.95)}
+@media(max-width:700px){.update-banner{flex-wrap:wrap}.update-banner .btn{width:100%}}
+/* サイドバーの更新通知 */
 .sb-update{background:var(--ok-soft);border:1px solid #b6dfc7;color:var(--ok);border-radius:10px;
   padding:8px 10px;margin-bottom:8px;cursor:pointer;font-size:12px;line-height:1.5}
 .sb-update:hover{filter:brightness(.97)}
@@ -925,7 +938,7 @@ function annCardHtml(){
 }
 
 /* ===== サイドバー（ピンク基調・グループ折りたたみ式） ===== */
-const APP_VER = 'ver.20260827.2';
+const APP_VER = 'ver.20260831.23';
 const NAV_GROUPS = [
   {key:'jinzai', label:'人材管理',   items:[['talent','👥','タレント'],['employees','🗂','従業員・人事情報'],['skills','🧭','スキル管理'],['evals','📝','評価管理']]},
   {key:'romu',   label:'労務・書類', items:[['docs','📄','労務・書類管理'],['licenses','🏛','許可証管理'],['guide','📘','手続きガイド']]},
@@ -1000,6 +1013,19 @@ function go(v){
   view=v; if(v!=='employees') currentEmpId=null; render(); window.scrollTo(0,0);
   document.getElementById('sidebar').classList.remove('open');
 }
+/* 更新が出たら画面上部に大きく出す。サイドバーだけだと見落とすため。 */
+function updateBannerHtml(){
+  if(!newVerAvailable) return '';
+  return `
+  <div class="update-banner" onclick="applyUpdate()" title="クリックすると最新版に更新します">
+    <span class="ic">🔄</span>
+    <div class="txt">
+      <b>システムが更新されました</b>
+      <span>新しいバージョン ${esc(newVerAvailable)} が公開されています。クリックして最新版に切り替えてください。</span>
+    </div>
+    <button class="btn" onclick="event.stopPropagation();applyUpdate()">今すぐ更新</button>
+  </div>`;
+}
 function render(){
   if(!navAllowed(view)) view='dashboard';
   renderNav();
@@ -1016,6 +1042,9 @@ function render(){
   else if(view==='guide') m.innerHTML = viewGuide();
   else if(view==='users') m.innerHTML = viewUsers();
   else if(view==='data') m.innerHTML = viewData();
+  /* 更新バナーは全画面共通で最上部に差し込む */
+  const b = updateBannerHtml();
+  if(b) m.insertAdjacentHTML('afterbegin', b);
 }
 
 /* ================= タレント・スキル（カオナビ型） ================= */
