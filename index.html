@@ -359,7 +359,8 @@ const ROLE_DESC = {
 /* 書き込みに必要な最低ランク（テーブル別） */
 const WRITE_RANK = {allowed_users:3, departments:2, doc_templates:2, employees:2, employee_docs:2, evaluations:2, kpis:2, assets:2,
   announcements:2,        // お知らせの投稿・削除は管理者以上
-  announcement_reads:1};  // 「確認しました」は本人（社員以上）が記録する
+  announcement_reads:1,   // 「確認しました」は本人（社員以上）が記録する
+  licenses:2};            // 会社の許可証は管理者以上のみ編集
 
 /* ===== 評価シート2026新版 マスタ ===== */
 const EVAL_ROLES = {
@@ -426,7 +427,7 @@ const KPI_LIBRARY = [
 ];
 
 /* ---------------- state ---------------- */
-let data = {departments:[], employees:[], evaluations:[], kpis:[], assets:[], docTemplates:[], allowedUsers:[], skillDefs:[], empSkills:{}, announcements:[], annReads:[]};
+let data = {departments:[], employees:[], evaluations:[], kpis:[], assets:[], docTemplates:[], allowedUsers:[], skillDefs:[], empSkills:{}, announcements:[], annReads:[], licenses:[]};
 let session = null;
 let view = 'dashboard';
 let empFilter = {q:'', status:'在籍', type:'', dept:''};
@@ -554,7 +555,7 @@ function dbToAsset(r){ return {id:r.id, assetNo:r.asset_no, category:r.category,
 function assetToDb(a){ return {id:a.id, asset_no:a.assetNo||'', category:a.category, name:a.name, serial:a.serial||'', purchase_date:dOrNull(a.purchaseDate), price:a.price||'', status:a.status, assigned_to:dOrNull(a.assignedTo), lend_date:dOrNull(a.lendDate), return_date:dOrNull(a.returnDate), notes:a.notes||''}; }
 
 async function loadAll(){
-  const [deps, tpls, emps, docs, evals, kpis, assets, allowed, skdefs, esk, anns, reads] = await Promise.all([
+  const [deps, tpls, emps, docs, evals, kpis, assets, allowed, skdefs, esk, anns, reads, lics] = await Promise.all([
     q(sb.from('departments').select('*').order('sort_order')),
     q(sb.from('doc_templates').select('*').order('sort_order')),
     q(sb.from('employees').select('*')),
@@ -567,9 +568,11 @@ async function loadAll(){
     q(sb.from('employee_skills').select('*')),
     q(sb.from('announcements').select('*').order('created_at', {ascending:false})),
     q(sb.from('announcement_reads').select('*')),
+    q(sb.from('licenses').select('*').order('sort_order')),
   ]);
   data.announcements = anns;
   data.annReads = reads;
+  data.licenses = (lics||[]).map(dbToLic);
   data.skillDefs = skdefs;
   data.empSkills = {};
   esk.forEach(r=>{
@@ -651,6 +654,25 @@ function buildAlerts(){
     if(pr.total>0 && pr.pct<100 && e.status==='内定'){
       const pend = pr.total - pr.done;
       alerts.push({level:'blue', emp:e, text:`入社書類 未完了 ${pend}件（${pr.pct}%完了）`, sort:500+pend});
+    }
+  });
+  /* 会社の許可証（登録支援機関・職業紹介事業など）。
+     更新申請の期限を過ぎると新規申請が必要になり、事業継続に直結するため
+     従業員のアラートより手前に出す（sort をマイナスにする）。 */
+  (data.licenses||[]).forEach(l=>{
+    if(l.status==='失効' || !l.validTo) return;
+    const s = licSchedule(l);
+    const dTo = daysUntil(l.validTo), dEnd = daysUntil(s.end), dPrep = daysUntil(s.prep);
+    if(dTo!==null && dTo<0){
+      alerts.push({level:'red', lic:l, text:`【許可】${l.name} が ${l.validTo} で失効しています`, sort:-9999});
+    } else if(dEnd!==null && dEnd<0){
+      alerts.push({level:'red', lic:l, text:`【許可】${l.name} の更新申請期限（${s.end}）を過ぎています — 新規申請が必要になる恐れ`, sort:-9998});
+    } else if(dEnd!==null && dEnd<=90){
+      alerts.push({level:dEnd<=30?'red':'yellow', lic:l,
+        text:`【許可】${l.name} 更新申請の期限 ${s.end}（${fmtDays(dEnd)}）— 満了日 ${l.validTo}`, sort:-1000+dEnd});
+    } else if(dPrep!==null && dPrep<=0 && dEnd!==null){
+      alerts.push({level:'blue', lic:l,
+        text:`【許可】${l.name} 更新準備の時期です（申請できる期間 ${s.start} 〜 ${s.end}）`, sort:-500});
     }
   });
   alerts.sort((a,b)=>a.sort-b.sort);
@@ -768,6 +790,7 @@ const NAV = [
   ['talent','タレント',1],
   ['employees','従業員・人事情報',1],
   ['docs','労務・書類管理',1],
+  ['licenses','許可証管理',1],
   ['evals','評価管理',1],
   ['skills','スキル管理',1],
   ['kpi','KPI管理',1],
@@ -899,7 +922,7 @@ function annCardHtml(){
 const APP_VER = 'ver.20260827.2';
 const NAV_GROUPS = [
   {key:'jinzai', label:'人材管理',   items:[['talent','👥','タレント'],['employees','🗂','従業員・人事情報'],['skills','🧭','スキル管理'],['evals','📝','評価管理']]},
-  {key:'romu',   label:'労務・書類', items:[['docs','📄','労務・書類管理'],['guide','📘','手続きガイド']]},
+  {key:'romu',   label:'労務・書類', items:[['docs','📄','労務・書類管理'],['licenses','🏛','許可証管理'],['guide','📘','手続きガイド']]},
   {key:'keiei',  label:'経営管理',   items:[['kpi','📈','KPI管理'],['assets','💼','資産管理']]},
   {key:'system', label:'設定',       items:[['users','👤','ユーザー管理'],['data','⚙️','データ管理']]},
 ];
@@ -916,7 +939,8 @@ function renderNav(){
   const uname = u.name || (myEmail().split('@')[0]) || '';
   /* アラート集計（権限に応じて自分の担当分のみ） */
   let alerts=[]; try{ alerts = buildAlerts(); }catch(e){}
-  if(myRank()<2){ const scoped=scopeEmps(data.employees); alerts = alerts.filter(a=>scoped.some(e=>e.id===a.emp.id)); }
+  /* 許可証アラート（a.emp が無い）は会社全体の話なので管理者以上にだけ出す */
+  if(myRank()<2){ const scoped=scopeEmps(data.employees); alerts = alerts.filter(a=>a.emp && scoped.some(e=>e.id===a.emp.id)); }
   const red = alerts.filter(a=>a.level==='red').length;
   const yel = alerts.filter(a=>a.level==='yellow').length;
   const alertTitle = myRank()>=2 ? '全体アラート' : '自分の担当のアラート';
@@ -977,6 +1001,7 @@ function render(){
   if(view==='dashboard') m.innerHTML = viewDashboard();
   else if(view==='talent') m.innerHTML = viewTalent();
   else if(view==='skills') m.innerHTML = viewSkills();
+  else if(view==='licenses') m.innerHTML = viewLicenses();
   else if(view==='employees') m.innerHTML = currentEmpId? viewEmpDetail(currentEmpId) : viewEmployees();
   else if(view==='docs') m.innerHTML = viewDocs();
   else if(view==='evals') m.innerHTML = viewEvals();
@@ -1537,6 +1562,230 @@ async function resetSkillDefs(){
   await loadAll(); render(); toast('初期テンプレートに戻しました');
 }
 
+/* ================= 社内の許可証管理 ================= */
+/* 更新スケジュールは満了日から自動計算する（手入力の値があればそちらを優先）。
+   ・ssw   ＝登録支援機関：満了日の「6か月前の月の初日」〜「4か月前の月末」
+   ・shokai＝職業紹介事業：満了日の3か月前まで（開始の目安はその1か月前） */
+const LICENSE_RULES = {
+  ssw:    {label:'登録支援機関（出入国在留管理庁）', startMonths:6, endMonths:4, endOfMonth:true},
+  shokai: {label:'職業紹介事業（厚生労働省）',       startMonths:4, endMonths:3, endOfMonth:false},
+};
+function addMonths(dateStr, minus){
+  const d = new Date(dateStr + 'T00:00:00');
+  if(isNaN(d)) return null;
+  const day = d.getDate();
+  d.setDate(1); d.setMonth(d.getMonth() - minus);
+  const last = new Date(d.getFullYear(), d.getMonth()+1, 0).getDate();
+  d.setDate(Math.min(day, last));
+  return d;
+}
+/* 日付を YYYY-MM-DD にする。toISOString() はUTCに変換してしまい、
+   日本時間(UTC+9)では1日前にずれるため、必ずローカルの年月日から組み立てる。 */
+const iso = d => d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` : '';
+function licSchedule(l){
+  const r = LICENSE_RULES[l.renewRule];
+  let start = l.renewStart, end = l.renewEnd;
+  if(r && l.validTo){
+    if(!start){
+      const s = addMonths(l.validTo, r.startMonths);
+      if(s){ s.setDate(1); start = iso(s); }           // 「〜か月前の月の初日」
+    }
+    if(!end){
+      const e = addMonths(l.validTo, r.endMonths);
+      if(e){
+        if(r.endOfMonth) e.setDate(new Date(e.getFullYear(), e.getMonth()+1, 0).getDate()); // 月末
+        end = iso(e);
+      }
+    }
+  }
+  // 準備開始の目安：申請開始の1か月前
+  let prep = l.prepStart;
+  if(!prep && start){ const p = addMonths(start, 1); prep = iso(p); }
+  return {start, end, prep};
+}
+function dbToLic(r){ return {id:r.id, name:r.name, authority:r.authority, licenseNo:r.license_no,
+  status:r.status, validFrom:r.valid_from||'', validTo:r.valid_to||'', renewRule:r.renew_rule||'',
+  renewStart:r.renew_start||'', renewEnd:r.renew_end||'', prepStart:r.prep_start||'',
+  renewPeriod:r.renew_period||'', fee:r.fee||'', docs:r.docs||[], refUrl:r.ref_url||'',
+  driveUrl:r.drive_url||'', notes:r.notes||'', sortOrder:r.sort_order||0}; }
+function licToDb(l){ return {id:l.id, name:l.name, authority:l.authority||'', license_no:l.licenseNo||'',
+  status:l.status||'有効', valid_from:dOrNull(l.validFrom), valid_to:dOrNull(l.validTo),
+  renew_rule:l.renewRule||'', renew_start:dOrNull(l.renewStart), renew_end:dOrNull(l.renewEnd),
+  prep_start:dOrNull(l.prepStart), renew_period:l.renewPeriod||'', fee:l.fee||'',
+  docs:l.docs||[], ref_url:l.refUrl||'', drive_url:l.driveUrl||'', notes:l.notes||'',
+  sort_order:l.sortOrder||0}; }
+
+function viewLicenses(){
+  if(myRank()<1) return '<div class="panel"><h2>閲覧権限がありません</h2></div>';
+  const list = (data.licenses||[]).slice().sort((a,b)=>(a.sortOrder||0)-(b.sortOrder||0));
+  const noDate = list.filter(l=>!l.validTo).length;
+  return `
+  <div class="panel">
+    <h2>許可証管理 <span class="en">Company Licenses — 有効期限・更新時期・必要書類・保管場所</span></h2>
+    ${noDate? `<div class="alert-item yellow" style="margin-bottom:12px">
+      <b>⚠️ 有効期限が未入力：${noDate}件</b>
+      <span>実際の許可証を見て「有効期間（満了日）」を入力してください。入力すると更新時期が自動計算され、アラートが出るようになります。</span>
+    </div>`:''}
+    <div class="toolbar">
+      <span class="muted">更新申請の期限を過ぎると、原則あらたに新規申請が必要になります（＝事業継続に直結）。</span>
+      <div class="spacer"></div>
+      ${canEdit()? '<button class="btn" onclick="openLicForm()">＋ 許可証を追加</button>':'<span class="muted">閲覧のみ</span>'}
+    </div>
+    ${list.map(l=>licCardHtml(l)).join('') || '<div class="muted">許可証が登録されていません。</div>'}
+  </div>`;
+}
+function licCardHtml(l){
+  const s = licSchedule(l);
+  const dTo = daysUntil(l.validTo), dEnd = daysUntil(s.end), dPrep = daysUntil(s.prep);
+  // 状態の判定：期限切れ＞申請期限が近い＞申請できる＞準備期間＞余裕あり
+  let badge = '<span class="badge b-gray">期限未入力</span>', level = '';
+  if(l.validTo){
+    if(dTo !== null && dTo < 0){ badge = '<span class="badge b-red">失効</span>'; level='red'; }
+    else if(dEnd !== null && dEnd < 0){ badge = '<span class="badge b-red">更新申請期限を経過</span>'; level='red'; }
+    else if(dEnd !== null && dEnd <= 30){ badge = `<span class="badge b-red">申請期限まで${dEnd}日</span>`; level='red'; }
+    else if(dEnd !== null && dEnd <= 90){ badge = `<span class="badge b-yellow">申請期限まで${dEnd}日</span>`; level='yellow'; }
+    else if(dPrep !== null && dPrep <= 0){ badge = '<span class="badge b-blue">更新の準備期間</span>'; level='blue'; }
+    else { badge = `<span class="badge b-green">有効（あと${dTo}日）</span>`; }
+  }
+  const docs = l.docs||[];
+  const done = docs.filter(d=>d.done).length;
+  const pct = docs.length? Math.round(done*100/docs.length) : 0;
+  const row = (k,v) => v? `<dt>${k}</dt><dd>${v}</dd>` : '';
+  return `
+  <div class="fieldset" style="margin-top:14px">
+    <legend>${esc(l.name)}</legend>
+    <div class="detail-head">
+      <div class="tag-row">${badge}
+        ${l.status && l.status!=='有効'? `<span class="badge b-yellow">${esc(l.status)}</span>`:''}
+        ${l.licenseNo? `<span class="badge b-gray">番号 ${esc(l.licenseNo)}</span>`:''}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${l.refUrl? `<a class="btn small ghost" href="${esc(l.refUrl)}" target="_blank" rel="noopener">📖 公式サイト</a>`:''}
+        ${l.driveUrl? `<a class="btn small secondary" href="${esc(l.driveUrl)}" target="_blank" rel="noopener">📁 許可証を開く</a>`
+          : '<span class="muted" style="align-self:center">保管リンク未設定</span>'}
+        ${canEdit()? `<button class="btn small" onclick="openLicForm('${l.id}')">編集</button>`:''}
+      </div>
+    </div>
+    <div class="grid cols3" style="margin-top:12px">
+      <div>
+        <div class="section-title">有効期間・更新時期</div>
+        <dl class="kv">
+          ${row('所管', esc(l.authority))}
+          ${row('有効期間', l.validFrom||l.validTo ? `${fmtDate(l.validFrom)} 〜 <b>${fmtDate(l.validTo)}</b>` : '')}
+          ${row('更新後の期間', esc(l.renewPeriod))}
+          <dt>準備開始の目安</dt><dd>${fmtDate(s.prep)}${dPrep!==null&&dPrep<=0?' <span class="badge b-blue">開始時期</span>':''}</dd>
+          <dt>申請できる期間</dt><dd>${s.start?fmtDate(s.start):'—'} 〜 <b>${s.end?fmtDate(s.end):'—'}</b></dd>
+          ${row('手数料', esc(l.fee))}
+        </dl>
+      </div>
+      <div>
+        <div class="section-title">必要書類 <span class="en">${done}/${docs.length}</span></div>
+        <div class="progress" style="margin-bottom:8px"><div style="width:${pct}%"></div></div>
+        ${docs.map((d,i)=>`
+          <div class="task-line" style="display:flex;gap:6px;align-items:flex-start">
+            <input type="checkbox" ${d.done?'checked':''} ${canEdit()?`onchange="toggleLicDoc('${l.id}',${i},this.checked)"`:'disabled'} style="margin-top:3px">
+            <span style="flex:1">${esc(d.name)}${d.note?`<br><span class="muted">${esc(d.note)}</span>`:''}</span>
+          </div>`).join('') || '<div class="muted">未登録</div>'}
+      </div>
+      <div>
+        <div class="section-title">メモ・注意点</div>
+        <div style="white-space:pre-wrap;font-size:12px;line-height:1.7">${esc(l.notes||'—')}</div>
+      </div>
+    </div>
+  </div>`;
+}
+async function toggleLicDoc(id, idx, checked){
+  if(!canEdit()){ toast(denyMsg(), true); return; }
+  const l = data.licenses.find(x=>x.id===id); if(!l || !l.docs[idx]) return;
+  l.docs[idx].done = checked;
+  await q(sb.from('licenses').update({docs:l.docs}).eq('id', id));
+  render();
+}
+function openLicForm(id){
+  if(!canEdit()){ toast(denyMsg(), true); return; }
+  const l = id? data.licenses.find(x=>x.id===id)
+    : {id:uid(), name:'', authority:'', licenseNo:'', status:'有効', validFrom:'', validTo:'',
+       renewRule:'', renewStart:'', renewEnd:'', prepStart:'', renewPeriod:'', fee:'',
+       docs:[], refUrl:'', driveUrl:'', notes:'', sortOrder:(data.licenses.length+1)*10};
+  window._licDraft = JSON.parse(JSON.stringify(l));
+  renderLicModal(!id);
+}
+function renderLicModal(isNew){
+  const l = window._licDraft;
+  const s = licSchedule(l);
+  modal(`
+  <h3>${isNew?'許可証を追加':'許可証を編集'}</h3>
+  <div class="formgrid">
+    <div style="grid-column:1/-1"><label>許可の名称</label><input id="lc_name" value="${esc(l.name)}" placeholder="例：登録支援機関 登録"></div>
+    <div><label>所管官庁・提出先</label><input id="lc_auth" value="${esc(l.authority)}"></div>
+    <div><label>許可番号・登録番号</label><input id="lc_no" value="${esc(l.licenseNo)}" placeholder="例：登録支援機関番号 12登-000000"></div>
+    <div><label>状態</label><select id="lc_status">${['有効','申請中','失効'].map(x=>`<option ${l.status===x?'selected':''}>${x}</option>`).join('')}</select></div>
+    <div><label>有効期間（開始）</label><input type="date" id="lc_from" value="${esc(l.validFrom)}"></div>
+    <div><label>有効期間（満了日）</label><input type="date" id="lc_to" value="${esc(l.validTo)}"
+      onchange="_licDraft.validTo=this.value;renderLicModal(${isNew})"></div>
+    <div><label>更新スケジュールの規則</label>
+      <select id="lc_rule" onchange="_licDraft.renewRule=this.value;renderLicModal(${isNew})">
+        <option value="">手入力する</option>
+        ${Object.entries(LICENSE_RULES).map(([k,r])=>`<option value="${k}" ${l.renewRule===k?'selected':''}>${r.label}</option>`).join('')}
+      </select></div>
+    <div><label>更新後の有効期間</label><input id="lc_period" value="${esc(l.renewPeriod)}" placeholder="例：5年"></div>
+    <div style="grid-column:1/-1"><label>手数料</label><input id="lc_fee" value="${esc(l.fee)}"></div>
+  </div>
+  <div class="fieldset"><legend>更新スケジュール</legend>
+    ${l.renewRule? `<p class="muted" style="margin-bottom:8px">満了日から自動計算しています（空欄のままで構いません）。
+      手入力すると、そちらが優先されます。<br>
+      → 準備開始 <b>${fmtDate(s.prep)}</b>／申請できる期間 <b>${s.start?fmtDate(s.start):'—'} 〜 ${s.end?fmtDate(s.end):'—'}</b></p>`
+      : '<p class="muted" style="margin-bottom:8px">規則を選ぶと自動計算されます。手入力も可能です。</p>'}
+    <div class="formgrid">
+      <div><label>準備開始</label><input type="date" id="lc_prep" value="${esc(l.prepStart)}" placeholder="${esc(s.prep)}"></div>
+      <div><label>申請開始日</label><input type="date" id="lc_rs" value="${esc(l.renewStart)}"></div>
+      <div><label>申請期限</label><input type="date" id="lc_re" value="${esc(l.renewEnd)}"></div>
+    </div>
+  </div>
+  <div class="formgrid" style="margin-top:12px">
+    <div><label>公式サイト（要件の根拠）</label><input id="lc_ref" value="${esc(l.refUrl)}" placeholder="https://"></div>
+    <div><label>許可証の保管場所（ドライブリンク）</label><input id="lc_drive" value="${esc(l.driveUrl)}" placeholder="https://drive.google.com/..."></div>
+  </div>
+  <div class="fieldset"><legend>必要書類</legend>
+    ${(l.docs||[]).map((d,i)=>`
+      <div class="task-line edit">
+        <span class="tno">${i+1}.</span>
+        <input value="${esc(d.name)}" placeholder="書類名" onchange="_licDraft.docs[${i}].name=this.value">
+        <input value="${esc(d.note||'')}" placeholder="メモ" class="task-en" onchange="_licDraft.docs[${i}].note=this.value">
+        <button class="btn small ghost" onclick="_licDraft.docs.splice(${i},1);renderLicModal(${isNew})">✕</button>
+      </div>`).join('')}
+    <button class="btn small secondary" style="margin-top:8px"
+      onclick="_licDraft.docs.push({name:'',note:'',done:false});renderLicModal(${isNew})">＋ 書類を追加</button>
+  </div>
+  <div class="field" style="margin-top:10px"><label>メモ・注意点</label>
+    <textarea id="lc_notes" rows="5" style="width:100%">${esc(l.notes)}</textarea></div>
+  <div class="modal-actions">
+    ${isNew?'':`<button class="btn danger" onclick="delLic('${l.id}')" style="margin-right:auto">削除</button>`}
+    <button class="btn ghost" onclick="closeModal()">キャンセル</button>
+    <button class="btn" onclick="saveLic(${isNew})">保存</button>
+  </div>`);
+}
+async function saveLic(isNew){
+  const l = window._licDraft;
+  const g = id => document.getElementById(id).value;
+  l.name = g('lc_name').trim();
+  if(!l.name){ toast('許可の名称を入力してください', true); return; }
+  l.authority = g('lc_auth').trim(); l.licenseNo = g('lc_no').trim(); l.status = g('lc_status');
+  l.validFrom = g('lc_from'); l.validTo = g('lc_to'); l.renewRule = g('lc_rule');
+  l.renewPeriod = g('lc_period').trim(); l.fee = g('lc_fee').trim();
+  l.prepStart = g('lc_prep'); l.renewStart = g('lc_rs'); l.renewEnd = g('lc_re');
+  l.refUrl = g('lc_ref').trim(); l.driveUrl = g('lc_drive').trim(); l.notes = g('lc_notes');
+  await q(sb.from('licenses').upsert(licToDb(l)));
+  if(isNew) data.licenses.push(l);
+  else { const i = data.licenses.findIndex(x=>x.id===l.id); if(i>=0) data.licenses[i] = l; }
+  closeModal(); render(); toast('保存しました');
+}
+async function delLic(id){
+  if(!confirm('この許可証を削除しますか？')) return;
+  await q(sb.from('licenses').delete().eq('id', id));
+  data.licenses = data.licenses.filter(x=>x.id!==id);
+  closeModal(); render(); toast('削除しました');
+}
+
 /* ---------------- dashboard ---------------- */
 function viewDashboard(){
   if(myRank()<=0){
@@ -1555,7 +1804,7 @@ function viewDashboard(){
   const natMap = {};
   active.forEach(e=>{ const n=e.nationality||'未設定'; natMap[n]=(natMap[n]||0)+1; });
   const scoped = scopeEmps(emps);
-  const alerts = buildAlerts().filter(a=>myRank()>=2 || scoped.some(e=>e.id===a.emp.id));
+  const alerts = buildAlerts().filter(a=>myRank()>=2 || (a.emp && scoped.some(e=>e.id===a.emp.id)));
   const lent = data.assets.filter(a=>a.status==='貸与中').length;
   return `
   <div class="grid cols4">
@@ -1572,7 +1821,9 @@ function viewDashboard(){
     <h2>⚠️ アラート <span class="en">Residence / contract / document deadlines</span></h2>
     ${alerts.length? alerts.map(a=>`
       <div class="alert-item ${a.level}">
-        <b><a href="javascript:openEmp('${a.emp.id}')">${esc(a.emp.nameKanji||a.emp.nameRoma)}</a></b>
+        <b>${a.emp
+          ? `<a href="javascript:openEmp('${a.emp.id}')">${esc(a.emp.nameKanji||a.emp.nameRoma)}</a>`
+          : `<a href="javascript:go('licenses')">🏛 会社</a>`}</b>
         <span>${esc(a.text)}</span>
       </div>`).join('') : '<div class="muted">現在アラートはありません。</div>'}
   </div>

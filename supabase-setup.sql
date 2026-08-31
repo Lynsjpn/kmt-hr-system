@@ -164,6 +164,30 @@ create table if not exists public.employee_skills (
 -- （level 列には四捨五入した平均が入る）
 alter table public.employee_skills add column if not exists task_levels jsonb not null default '{}'::jsonb;
 
+-- 社内の許可証管理（登録支援機関・有料/無料職業紹介事業など会社としての許認可）
+-- docs は [{name,note,done}] の配列。renew_rule は 'ssw' / 'shokai' / 空（手入力）
+create table if not exists public.licenses (
+  id           uuid primary key default gen_random_uuid(),
+  name         text not null default '',
+  authority    text default '',
+  license_no   text default '',
+  status       text default '有効',
+  valid_from   date,
+  valid_to     date,
+  renew_rule   text default '',
+  renew_start  date,
+  renew_end    date,
+  prep_start   date,
+  renew_period text default '',
+  fee          text default '',
+  docs         jsonb not null default '[]'::jsonb,
+  ref_url      text default '',
+  drive_url    text default '',
+  notes        text default '',
+  sort_order   int default 0,
+  created_at   timestamptz not null default now()
+);
+
 grant usage on schema public to anon, authenticated;
 grant select, insert, update, delete on all tables in schema public to authenticated;
 
@@ -362,6 +386,17 @@ select * from (values
  ('s53','共通・マネジメント','Core & Management','コンプライアンス理解','Compliance Awareness','個人情報・入管法・労働法の理解','Privacy, immigration law, labor law',53)
 ) as v(id, category, category_en, name, name_en, description, description_en, sort_order)
 where not exists (select 1 from public.skill_defs);
+
+-- licenses：閲覧は社員以上／変更は管理者以上
+alter table public.licenses enable row level security;
+drop policy if exists kmt_lic_select on public.licenses;
+drop policy if exists kmt_lic_insert on public.licenses;
+drop policy if exists kmt_lic_update on public.licenses;
+drop policy if exists kmt_lic_delete on public.licenses;
+create policy kmt_lic_select on public.licenses for select to authenticated using (public.my_rank() >= 1);
+create policy kmt_lic_insert on public.licenses for insert to authenticated with check (public.my_rank() >= 2);
+create policy kmt_lic_update on public.licenses for update to authenticated using (public.my_rank() >= 2) with check (public.my_rank() >= 2);
+create policy kmt_lic_delete on public.licenses for delete to authenticated using (public.my_rank() >= 2);
 
 -- 5) 最初の全体管理者 -----------------------------------------------
 --    ここで登録するのはメールアドレスと権限だけです。
