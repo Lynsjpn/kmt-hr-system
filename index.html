@@ -456,7 +456,13 @@ function toggleSkillLang(on){
 function uid(){ return crypto.randomUUID(); }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function fmtDate(d){ return d?d:'—'; }
-function today(){ return new Date().toISOString().slice(0,10); }
+/* 今日の日付（YYYY-MM-DD）。toISOString() はUTCに変換するため、
+   日本時間の 00:00〜08:59 に使うと「前日」になってしまう。
+   書類の発行日や書類の受領日に効いてくるので、必ずローカルの年月日で組み立てる。 */
+function today(){
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
 function daysUntil(dateStr){
   if(!dateStr) return null;
   const d = new Date(dateStr+'T00:00:00');
