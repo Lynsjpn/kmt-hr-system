@@ -53,6 +53,22 @@ main{width:100%;max-width:1280px;margin:0 auto;padding:20px;flex:1}
 .sb-alert .cnt.y{background:var(--warn)}
 .sb-alert .cnt.z{background:#ccc3bf}
 .sb-alert .sub-row{display:flex;justify-content:space-between;font-size:11px;color:var(--sub);padding:1px 0 1px 14px}
+/* ===== GLT月報 ===== */
+.gp-head{background:var(--accent-soft);border-left:5px solid var(--accent);border-radius:8px;
+  padding:10px 14px;font-size:16px;font-weight:800;margin-bottom:14px}
+.gmark{display:inline-block;min-width:52px;padding:2px 8px;border-radius:5px;font-size:11px;font-weight:800;text-align:center}
+.g-good{background:#1e7e4e;color:#fff}
+.g-warn{background:#f2d024;color:#5c4a00}
+.g-bad{background:#c0392b;color:#fff}
+.g-none{background:#eee;color:#999}
+.gp-months{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(240px,1fr))}
+.gp-month{border:1px solid var(--border);border-radius:9px;overflow:hidden;background:#fff}
+.gp-month-head{background:var(--sb-deep);color:var(--sb-on-deep);padding:6px 10px;font-weight:800;font-size:13px}
+.gp-month-head .muted{font-size:10px;font-weight:400;float:right;line-height:1.8}
+.gp-month table{font-size:12px}
+.gp-month td,.gp-month th{padding:4px 8px}
+tr.gp-total td{background:var(--accent-soft);font-weight:800}
+td.center,th.center{text-align:center}
 /* 画面上部の更新バナー（見落とし防止のため大きく出す） */
 .update-banner{position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:12px;
   background:linear-gradient(100deg,#1e7e4e,#2f9e69);color:#fff;border-radius:10px;
@@ -373,7 +389,8 @@ const ROLE_DESC = {
 const WRITE_RANK = {allowed_users:3, departments:2, doc_templates:2, employees:2, employee_docs:2, evaluations:2, kpis:2, assets:2,
   announcements:2,        // お知らせの投稿・削除は管理者以上
   announcement_reads:1,   // 「確認しました」は本人（社員以上）が記録する
-  licenses:2};            // 会社の許可証は管理者以上のみ編集
+  licenses:2,             // 会社の許可証は管理者以上のみ編集
+  monthly_reports:2, team_targets:2, case_records:2};  // 月報の入力も管理者以上
 
 /* ===== 評価シート2026新版 マスタ ===== */
 const EVAL_ROLES = {
@@ -440,7 +457,7 @@ const KPI_LIBRARY = [
 ];
 
 /* ---------------- state ---------------- */
-let data = {departments:[], employees:[], evaluations:[], kpis:[], assets:[], docTemplates:[], allowedUsers:[], skillDefs:[], empSkills:{}, announcements:[], annReads:[], licenses:[]};
+let data = {departments:[], employees:[], evaluations:[], kpis:[], assets:[], docTemplates:[], allowedUsers:[], skillDefs:[], empSkills:{}, announcements:[], annReads:[], licenses:[], monthlyReports:[], teamTargets:[], caseRecords:[]};
 let session = null;
 let view = 'dashboard';
 let empFilter = {q:'', status:'在籍', type:'', dept:''};
@@ -574,7 +591,8 @@ function dbToAsset(r){ return {id:r.id, assetNo:r.asset_no, category:r.category,
 function assetToDb(a){ return {id:a.id, asset_no:a.assetNo||'', category:a.category, name:a.name, serial:a.serial||'', purchase_date:dOrNull(a.purchaseDate), price:a.price||'', status:a.status, assigned_to:dOrNull(a.assignedTo), lend_date:dOrNull(a.lendDate), return_date:dOrNull(a.returnDate), notes:a.notes||''}; }
 
 async function loadAll(){
-  const [deps, tpls, emps, docs, evals, kpis, assets, allowed, skdefs, esk, anns, reads, lics] = await Promise.all([
+  const [deps, tpls, emps, docs, evals, kpis, assets, allowed, skdefs, esk, anns, reads, lics,
+         mrep, ttg, crec] = await Promise.all([
     q(sb.from('departments').select('*').order('sort_order')),
     q(sb.from('doc_templates').select('*').order('sort_order')),
     q(sb.from('employees').select('*')),
@@ -588,7 +606,16 @@ async function loadAll(){
     q(sb.from('announcements').select('*').order('created_at', {ascending:false})),
     q(sb.from('announcement_reads').select('*')),
     q(sb.from('licenses').select('*').order('sort_order')),
+    q(sb.from('monthly_reports').select('*')),
+    q(sb.from('team_targets').select('*')),
+    q(sb.from('case_records').select('*').order('entry_date', {ascending:false})),
   ]);
+  data.monthlyReports = (mrep||[]).map(r=>({year:r.year, month:r.month, team:r.team,
+    shokai:r.shokai, shinki:r.shinki, jisshusei:r.jisshusei, nyusha:r.nyusha,
+    taishoku:r.taishoku, cancel:r.cancel, achieved:r.achieved}));
+  data.teamTargets = (ttg||[]).map(r=>({year:r.year, team:r.team, existingCount:r.existing_count,
+    annualTarget:r.annual_target, q:[r.q1, r.q2, r.q3, r.q4]}));
+  data.caseRecords = (crec||[]).map(dbToCase);
   data.announcements = anns;
   data.annReads = reads;
   data.licenses = (lics||[]).map(dbToLic);
@@ -812,6 +839,7 @@ const NAV = [
   ['licenses','許可証管理',1],
   ['evals','評価管理',1],
   ['skills','スキル管理',1],
+  ['geppo','GLT月報',1],
   ['kpi','KPI管理',1],
   ['assets','資産管理',2],
   ['guide','手続きガイド',0],
@@ -942,7 +970,7 @@ const APP_VER = 'ver.20260831.23';
 const NAV_GROUPS = [
   {key:'jinzai', label:'人材管理',   items:[['talent','👥','タレント'],['employees','🗂','従業員・人事情報'],['skills','🧭','スキル管理'],['evals','📝','評価管理']]},
   {key:'romu',   label:'労務・書類', items:[['docs','📄','労務・書類管理'],['licenses','🏛','許可証管理'],['guide','📘','手続きガイド']]},
-  {key:'keiei',  label:'経営管理',   items:[['kpi','📈','KPI管理'],['assets','💼','資産管理']]},
+  {key:'keiei',  label:'経営管理',   items:[['geppo','🗓','GLT月報'],['kpi','📈','KPI管理'],['assets','💼','資産管理']]},
   {key:'system', label:'設定',       items:[['users','👤','ユーザー管理'],['data','⚙️','データ管理']]},
 ];
 let sbOpen = {jinzai:true, romu:true, keiei:true, system:false};
@@ -1034,6 +1062,7 @@ function render(){
   else if(view==='talent') m.innerHTML = viewTalent();
   else if(view==='skills') m.innerHTML = viewSkills();
   else if(view==='licenses') m.innerHTML = viewLicenses();
+  else if(view==='geppo') m.innerHTML = viewGeppo();
   else if(view==='employees') m.innerHTML = currentEmpId? viewEmpDetail(currentEmpId) : viewEmployees();
   else if(view==='docs') m.innerHTML = viewDocs();
   else if(view==='evals') m.innerHTML = viewEvals();
@@ -1595,6 +1624,335 @@ async function resetSkillDefs(){
   await q(sb.from('skill_defs').delete().neq('id',''));
   await q(sb.from('skill_defs').insert(defs));
   await loadAll(); render(); toast('初期テンプレートに戻しました');
+}
+
+/* ================= GLT月報 ================= */
+/* 入力は「1人1行」の案件記録（インドネシア管理データ等の台帳）。
+   月報はそこから自動集計する。記録が無い月は、Excelから取り込んだ月次合計を使う。 */
+const CASE_CATEGORIES = {
+  '紹介':     [],
+  '新規採用': ['認定','国内変更'],
+  '元実習生': ['認定','国内変更'],
+  '入社':     ['配属','切替'],
+  '退職':     ['転職','帰国','キャンセル'],
+};
+const CASE_CAT_LIST = Object.keys(CASE_CATEGORIES);
+/* 合計は 新規採用＋元実習生＋入社＋退職（紹介は別枠）。入力例の割合と一致することを確認済み */
+const AGG_KEYS = ['新規採用','元実習生','入社','退職'];
+const QUARTERS = [[1,3],[4,6],[7,9],[10,12]];
+
+function dbToCase(r){ return {id:r.id, team:r.team, entryDate:r.entry_date, seqNo:r.seq_no,
+  personName:r.person_name, personNo:r.person_no||'', company:r.company||'', category:r.category,
+  subtype:r.subtype||'', staff:r.staff||'', note:r.note||''}; }
+function caseToDb(c){ return {id:c.id, team:c.team, entry_date:c.entryDate, seq_no:c.seqNo||null,
+  person_name:c.personName||'', person_no:c.personNo||'', company:c.company||'', category:c.category,
+  subtype:c.subtype||'', staff:c.staff||'', note:c.note||'', updated_at:new Date().toISOString()}; }
+
+/* 指定した年月・チームの集計。案件記録があればそれを、無ければ月次合計を使う */
+function monthAgg(year, month, team){
+  const recs = (data.caseRecords||[]).filter(c=>c.team===team && c.entryDate &&
+    +c.entryDate.slice(0,4)===year && +c.entryDate.slice(5,7)===month);
+  let a;
+  if(recs.length){
+    a = {紹介:0, 新規採用:0, 元実習生:0, 入社:0, 退職:0, キャンセル:0, _src:'台帳'};
+    recs.forEach(c=>{
+      if(a[c.category]!=null) a[c.category]++;
+      if(c.subtype==='キャンセル') a['キャンセル']++;
+    });
+    a._achieved = null;
+  } else {
+    const m = (data.monthlyReports||[]).find(x=>x.year===year && x.month===month && x.team===team);
+    if(!m) return null;
+    a = {紹介:m.shokai, 新規採用:m.shinki, 元実習生:m.jisshusei, 入社:m.nyusha,
+         退職:m.taishoku, キャンセル:m.cancel, _src:'月次合計'};
+    a._achieved = (m.achieved==null || m.achieved==='') ? null : +m.achieved;
+  }
+  a.合計 = AGG_KEYS.reduce((s,k)=>s+a[k], 0);
+  /* 達成数は手入力があればそれを使う。無ければ「新規採用＋元実習生」で自動計算。
+     ※GLT月報の達成数は式が一定でなかったため（チームごとに算出方法が違って見える）、
+       手入力を正とする設計にしている。 */
+  a.決定auto = a['新規採用'] + a['元実習生'];
+  a.決定 = a._achieved !== null ? a._achieved : a.決定auto;
+  a.決定手入力 = a._achieved !== null;
+  return a;
+}
+function rangeAgg(year, months, team){
+  const out = {紹介:0,新規採用:0,元実習生:0,入社:0,退職:0,キャンセル:0,合計:0,決定:0,決定auto:0, months:0, 手入力:0};
+  months.forEach(m=>{ const a = monthAgg(year, m, team); if(!a) return;
+    out.months++; if(a.決定手入力) out.手入力++;
+    ['紹介','新規採用','元実習生','入社','退職','キャンセル','合計','決定','決定auto'].forEach(k=>out[k]+=a[k]); });
+  return out;
+}
+function targetOf(year, team){
+  return (data.teamTargets||[]).find(t=>t.year===year && t.team===team)
+      || {year, team, existingCount:null, annualTarget:0, q:[0,0,0,0]};
+}
+/* GOOD ≥100% ／ 注意 ≥50% ／ BAD <50%（GLT月報の注意マークに合わせた既定値） */
+function gradeOf(rate){
+  if(rate===null) return {label:'—', cls:'g-none'};
+  if(rate >= 1)   return {label:'GOOD', cls:'g-good'};
+  if(rate >= 0.5) return {label:'注意', cls:'g-warn'};
+  return {label:'BAD', cls:'g-bad'};
+}
+const pct = (n,d) => d ? Math.round(n/d*1000)/10 : null;
+
+let geppoSub  = 'team';
+let geppoYear = 2026;
+let geppoTeam = 'インドネシア';
+let geppoMonth = 1;
+
+function geppoYears(){
+  const ys = new Set([...(data.monthlyReports||[]).map(m=>m.year),
+                      ...(data.caseRecords||[]).map(c=>+String(c.entryDate).slice(0,4))]);
+  ys.add(new Date().getFullYear());
+  return [...ys].filter(Boolean).sort((a,b)=>b-a);
+}
+function viewGeppo(){
+  if(myRank()<1) return '<div class="panel"><h2>閲覧権限がありません</h2></div>';
+  const subs = [['team','チーム別'],['all','KMT全体'],['input','案件記録の入力']];
+  if(!subs.some(s=>s[0]===geppoSub)) geppoSub='team';
+  const years = geppoYears();
+  if(!years.includes(geppoYear)) geppoYear = years[0];
+  return `
+  <div class="panel">
+    <h2>GLT月報 <span class="en">Monthly Report — 国籍チーム別の実績と目標達成状況</span></h2>
+    <div class="toolbar">
+      <div class="viewseg">
+        ${subs.map(([k,l])=>`<button class="${geppoSub===k?'active':''}" onclick="geppoSub='${k}';render()">${l}</button>`).join('')}
+      </div>
+      <select onchange="geppoYear=+this.value;render()">
+        ${years.map(y=>`<option value="${y}" ${geppoYear===y?'selected':''}>${y}年</option>`).join('')}
+      </select>
+      ${geppoSub!=='all'? `<select onchange="geppoTeam=this.value;render()">
+        ${NATION_TEAMS.map(t=>`<option ${geppoTeam===t?'selected':''}>${esc(t)}</option>`).join('')}
+      </select>`:''}
+      <div class="spacer"></div>
+      <span class="muted">GOOD ≥100%／注意 ≥50%／BAD &lt;50%</span>
+    </div>
+    ${geppoSub==='team'? geppoTeamHtml() : geppoSub==='all'? geppoAllHtml() : geppoInputHtml()}
+  </div>`;
+}
+
+/* ---- チーム別（年間サマリー＋四半期＋月別内訳） ---- */
+function geppoTeamHtml(){
+  const y = geppoYear, team = geppoTeam, t = targetOf(y, team);
+  const yr = rangeAgg(y, [1,2,3,4,5,6,7,8,9,10,11,12], team);
+  const yRate = pct(yr.決定, t.annualTarget);
+  return `
+  <div class="gp-head">${esc(team)}チーム ${y}年</div>
+  <div class="grid cols4" style="margin-bottom:14px">
+    <div class="stat"><div class="num">${t.existingCount!=null?t.existingCount:'—'}</div><div class="lbl">既存人数</div></div>
+    <div class="stat"><div class="num">${t.annualTarget||'—'}</div><div class="lbl">年間目標</div></div>
+    <div class="stat"><div class="num">${yr.決定}</div><div class="lbl">達成数（新規採用＋元実習生）</div></div>
+    <div class="stat"><div class="num">${yRate!==null?yRate+'%':'—'}</div><div class="lbl">達成率</div></div>
+  </div>
+  <div class="section-title">3か月ごとの総合目標</div>
+  <div class="tablewrap"><table>
+    <tr><th></th><th>期間</th><th class="center">目標</th><th class="center">達成数</th><th class="center">達成率</th><th class="center">注意マーク</th></tr>
+    ${QUARTERS.map((q,i)=>{
+      const months = []; for(let m=q[0]; m<=q[1]; m++) months.push(m);
+      const a = rangeAgg(y, months, team);
+      const tg = t.q ? t.q[i] : 0;
+      const rate = pct(a.決定, tg), g = gradeOf(tg? a.決定/tg : null);
+      return `<tr><td><b>第${i+1}期</b></td><td>${y}年${q[0]}月〜${y}年${q[1]}月</td>
+        <td class="center">${tg||'—'}</td><td class="center"><b>${a.決定}</b></td>
+        <td class="center">${rate!==null?rate+'%':'—'}</td>
+        <td class="center"><span class="gmark ${g.cls}">${g.label}</span></td></tr>`;
+    }).join('')}
+  </table></div>
+  <div class="section-title" style="margin-top:16px">月別の内訳</div>
+  <div class="gp-months">
+    ${[1,2,3,4,5,6,7,8,9,10,11,12].map(m=>{
+      const a = monthAgg(y, m, team);
+      if(!a) return '';
+      const rows = ['紹介', ...AGG_KEYS].map(k=>{
+        const p = k==='紹介' ? null : pct(a[k], a.合計);
+        return `<tr><td>${k}</td><td class="center">${a[k]}</td>
+          <td class="center muted">${p!==null?p+'%':'—'}</td></tr>`;
+      }).join('');
+      return `<div class="gp-month">
+        <div class="gp-month-head">${m}月 <span class="muted">${a._src}</span></div>
+        <table><tr><th>状況</th><th class="center">人数</th><th class="center">割合</th></tr>
+          ${rows}
+          <tr class="gp-total"><td>合計</td><td class="center"><b>${a.合計}</b></td><td class="center">100%</td></tr>
+          ${a.キャンセル? `<tr><td class="muted">うちキャンセル</td><td class="center muted">${a.キャンセル}</td><td></td></tr>`:''}
+        </table></div>`;
+    }).join('') || '<div class="muted">この年のデータがありません。</div>'}
+  </div>`;
+}
+
+/* ---- KMT全体 ---- */
+function geppoAllHtml(){
+  const y = geppoYear;
+  const all = [1,2,3,4,5,6,7,8,9,10,11,12];
+  const perTeam = NATION_TEAMS.map(t=>({team:t, a:rangeAgg(y, all, t), t:targetOf(y,t)}));
+  const sum = k => perTeam.reduce((s,x)=>s+x.a[k], 0);
+  const totalTarget = perTeam.reduce((s,x)=>s+(x.t.annualTarget||0), 0);
+  const totalKettei = sum('決定');
+  const rate = pct(totalKettei, totalTarget);
+  const existing = perTeam.reduce((s,x)=>s+(x.t.existingCount||0), 0);
+  return `
+  <div class="gp-head">ＫＭＴ全体チーム ${y}年</div>
+  <div class="grid cols4" style="margin-bottom:14px">
+    <div class="stat"><div class="num">${existing||'—'}</div><div class="lbl">KMT全既存人数</div></div>
+    <div class="stat"><div class="num">${totalTarget||'—'}</div><div class="lbl">総合目標</div></div>
+    <div class="stat"><div class="num">${totalKettei}</div><div class="lbl">総合達成数</div></div>
+    <div class="stat"><div class="num">${rate!==null?rate+'%':'—'}</div><div class="lbl">達成率</div></div>
+    <div class="stat"><div class="num">${sum('退職')}</div><div class="lbl">年間退職人数</div></div>
+    <div class="stat"><div class="num">${totalTarget? totalKettei-totalTarget : '—'}</div><div class="lbl">目標まであと</div></div>
+    <div class="stat"><div class="num">${sum('紹介')}</div><div class="lbl">紹介案件</div></div>
+    <div class="stat"><div class="num">${totalKettei - sum('退職')}</div><div class="lbl">純増（達成数−退職）</div></div>
+  </div>
+  <div class="section-title">四半期ごとの達成数</div>
+  <div class="tablewrap"><table>
+    <tr><th></th><th class="center">目標</th><th class="center">達成数</th><th class="center">達成率</th><th class="center">注意マーク</th></tr>
+    ${QUARTERS.map((q,i)=>{
+      const months=[]; for(let m=q[0];m<=q[1];m++) months.push(m);
+      const got = NATION_TEAMS.reduce((s,t)=>s+rangeAgg(y,months,t).決定, 0);
+      const tg  = perTeam.reduce((s,x)=>s+(x.t.q? x.t.q[i]:0), 0);
+      const g = gradeOf(tg? got/tg : null);
+      return `<tr><td><b>第${i+1}期</b></td><td class="center">${tg||'—'}</td>
+        <td class="center"><b>${got}</b></td><td class="center">${pct(got,tg)!==null?pct(got,tg)+'%':'—'}</td>
+        <td class="center"><span class="gmark ${g.cls}">${g.label}</span></td></tr>`;
+    }).join('')}
+  </table></div>
+  <div class="section-title" style="margin-top:16px">チーム別 内訳（${y}年 通年）</div>
+  <div class="tablewrap"><table>
+    <tr><th>状況</th>${perTeam.map(x=>`<th class="center">${esc(x.team)}</th>`).join('')}<th class="center">KMT</th></tr>
+    ${['紹介','新規採用','元実習生','入社','退職'].map(k=>`
+      <tr><td>${k}</td>${perTeam.map(x=>`<td class="center">${x.a[k]}</td>`).join('')}
+      <td class="center"><b>${sum(k)}</b></td></tr>`).join('')}
+    <tr><td class="muted">うちキャンセル</td>${perTeam.map(x=>`<td class="center muted">${x.a.キャンセル}</td>`).join('')}
+      <td class="center muted">${sum('キャンセル')}</td></tr>
+    <tr class="gp-total"><td>目標</td>${perTeam.map(x=>`<td class="center">${x.t.annualTarget||'—'}</td>`).join('')}
+      <td class="center"><b>${totalTarget||'—'}</b></td></tr>
+    <tr class="gp-total"><td>達成数</td>${perTeam.map(x=>`<td class="center"><b>${x.a.決定}</b></td>`).join('')}
+      <td class="center"><b>${totalKettei}</b></td></tr>
+    <tr class="gp-total"><td>達成率</td>${perTeam.map(x=>{const r=pct(x.a.決定,x.t.annualTarget);
+      return `<td class="center">${r!==null?r+'%':'—'}</td>`;}).join('')}
+      <td class="center">${rate!==null?rate+'%':'—'}</td></tr>
+    <tr><td>注意マーク</td>${perTeam.map(x=>{const g=gradeOf(x.t.annualTarget? x.a.決定/x.t.annualTarget : null);
+      return `<td class="center"><span class="gmark ${g.cls}">${g.label}</span></td>`;}).join('')}
+      <td class="center"><span class="gmark ${gradeOf(totalTarget? totalKettei/totalTarget:null).cls}">${gradeOf(totalTarget? totalKettei/totalTarget:null).label}</span></td></tr>
+  </table></div>`;
+}
+
+/* ---- 案件記録の入力（1人1行の台帳） ---- */
+function geppoInputHtml(){
+  const y = geppoYear, team = geppoTeam;
+  const recs = (data.caseRecords||[]).filter(c=>c.team===team && String(c.entryDate).startsWith(String(y)))
+    .sort((a,b)=> (b.entryDate||'').localeCompare(a.entryDate||'') || (b.seqNo||0)-(a.seqNo||0));
+  const a = monthAgg(y, geppoMonth, team);
+  return `
+  <div class="toolbar">
+    <select onchange="geppoMonth=+this.value;render()">
+      ${[1,2,3,4,5,6,7,8,9,10,11,12].map(m=>`<option value="${m}" ${geppoMonth===m?'selected':''}>${m}月の集計</option>`).join('')}
+    </select>
+    <span class="muted">${a? `${a._src}から集計：合計 ${a.合計}名` : 'この月のデータなし'}</span>
+    <div class="spacer"></div>
+    ${canEdit()? `<button class="btn" onclick="openCaseForm()">＋ 案件を記録</button>`
+      : '<span class="muted">閲覧のみ</span>'}
+  </div>
+  ${a? `<div class="tablewrap" style="max-width:560px;margin-bottom:14px"><table>
+    <tr><th>項目</th><th class="center">人数</th><th class="center">割合</th></tr>
+    ${['紹介',...AGG_KEYS].map(k=>`<tr><td>${k}</td><td class="center">${a[k]}</td>
+      <td class="center muted">${k==='紹介'?'—':(pct(a[k],a.合計)??0)+'%'}</td></tr>`).join('')}
+    <tr class="gp-total"><td>合計</td><td class="center"><b>${a.合計}</b></td><td class="center">100%</td></tr>
+    <tr><td>達成数
+        <br><span class="muted">${a.決定手入力? '手入力の値を使用中' : `自動計算：新規採用＋元実習生＝${a.決定auto}`}</span></td>
+      <td class="center">${canEdit()
+        ? `<input type="number" value="${a._achieved!==null?a._achieved:''}" placeholder="${a.決定auto}"
+             style="width:70px;text-align:center" onchange="setAchieved(${y},${geppoMonth},'${team}',this.value)">`
+        : `<b>${a.決定}</b>`}</td>
+      <td class="center muted">${a.決定手入力?'手入力':'自動'}</td></tr>
+  </table></div>`:''}
+  <div class="tablewrap"><table>
+    <tr><th>記入日</th><th>NO</th><th>人材名</th><th>番号</th><th>会社名</th><th>状況</th><th>担当名</th><th>備考</th></tr>
+    ${recs.map(c=>`<tr class="${canEdit()?'clickable':''}" ${canEdit()?`onclick="openCaseForm('${c.id}')"`:''}>
+      <td>${esc(c.entryDate)}</td><td>${c.seqNo||''}</td><td><b>${esc(c.personName)}</b></td>
+      <td>${esc(c.personNo)}</td><td>${esc(c.company)}</td>
+      <td><span class="badge ${caseBadge(c.category)}">${esc(c.category)}${c.subtype?`（${esc(c.subtype)}）`:''}</span></td>
+      <td>${esc(c.staff)}</td><td class="muted">${esc(c.note)}</td></tr>`).join('')
+      || `<tr><td colspan="8" class="muted">${y}年の${team}チームの記録はまだありません。
+          「＋ 案件を記録」から1人ずつ入力すると、上の月次集計に自動反映されます。
+          （記録が無い月は、Excelから取り込んだ月次合計を表示します）</td></tr>`}
+  </table></div>`;
+}
+/* 達成数を手入力で上書きする（空にすると自動計算に戻る） */
+async function setAchieved(year, month, team, val){
+  if(!canEdit()){ toast(denyMsg(), true); return; }
+  const v = val==='' ? null : parseInt(val);
+  if(val!=='' && isNaN(v)){ toast('数字を入力してください', true); return; }
+  let m = data.monthlyReports.find(x=>x.year===year && x.month===month && x.team===team);
+  if(!m){ m = {year, month, team, shokai:0, shinki:0, jisshusei:0, nyusha:0, taishoku:0, cancel:0, achieved:v};
+    data.monthlyReports.push(m); }
+  else m.achieved = v;
+  await q(sb.from('monthly_reports').upsert(
+    {year, month, team, shokai:m.shokai, shinki:m.shinki, jisshusei:m.jisshusei,
+     nyusha:m.nyusha, taishoku:m.taishoku, cancel:m.cancel, achieved:v},
+    {onConflict:'year,month,team'}));
+  render(); toast(v===null? '自動計算に戻しました' : '達成数を保存しました');
+}
+function caseBadge(cat){
+  return cat==='入社'? 'b-green' : cat==='退職'? 'b-red' : cat==='紹介'? 'b-gray' : 'b-blue';
+}
+function openCaseForm(id){
+  if(!canEdit()){ toast(denyMsg(), true); return; }
+  const maxNo = Math.max(0, ...(data.caseRecords||[]).filter(c=>c.team===geppoTeam).map(c=>c.seqNo||0));
+  const c = id? data.caseRecords.find(x=>x.id===id)
+    : {id:uid(), team:geppoTeam, entryDate:today(), seqNo:maxNo+1, personName:'', personNo:'',
+       company:'', category:'新規採用', subtype:'認定', staff:'', note:''};
+  window._caseDraft = JSON.parse(JSON.stringify(c));
+  renderCaseModal(!id);
+}
+function renderCaseModal(isNew){
+  const c = window._caseDraft;
+  const subs = CASE_CATEGORIES[c.category]||[];
+  modal(`
+  <h3>${isNew?'案件を記録':'案件記録を編集'}</h3>
+  <div class="formgrid">
+    <div><label>チーム</label><select id="cs_team">${NATION_TEAMS.map(t=>`<option ${c.team===t?'selected':''}>${esc(t)}</option>`).join('')}</select></div>
+    <div><label>記入日</label><input type="date" id="cs_date" value="${esc(c.entryDate)}"></div>
+    <div><label>NO</label><input type="number" id="cs_no" value="${c.seqNo||''}"></div>
+    <div><label>人材名</label><input id="cs_name" value="${esc(c.personName)}" placeholder="例：ACHMAD MUDDAFIQUL HAFIDZ"></div>
+    <div><label>番号</label><input id="cs_pno" value="${esc(c.personNo)}"></div>
+    <div><label>会社名</label><input id="cs_comp" value="${esc(c.company)}"></div>
+    <div><label>状況（項目）</label>
+      <select id="cs_cat" onchange="_caseDraft.category=this.value;_caseDraft.subtype=(CASE_CATEGORIES[this.value]||[])[0]||'';renderCaseModal(${isNew})">
+        ${CASE_CAT_LIST.map(k=>`<option ${c.category===k?'selected':''}>${k}</option>`).join('')}
+      </select></div>
+    <div><label>内訳</label>
+      ${subs.length? `<select id="cs_sub">${subs.map(s=>`<option ${c.subtype===s?'selected':''}>${s}</option>`).join('')}</select>`
+        : `<input id="cs_sub" value="" disabled placeholder="（内訳なし）">`}</div>
+    <div><label>担当名</label><input id="cs_staff" value="${esc(c.staff)}" placeholder="例：SOMAD"></div>
+  </div>
+  <div class="field" style="margin-top:10px"><label>備考</label>
+    <input id="cs_note" value="${esc(c.note)}" style="width:100%" placeholder="例：3/13 配属（認定）"></div>
+  <div class="modal-actions">
+    ${isNew?'':`<button class="btn danger" onclick="delCase('${c.id}')" style="margin-right:auto">削除</button>`}
+    <button class="btn ghost" onclick="closeModal()">キャンセル</button>
+    <button class="btn" onclick="saveCase(${isNew})">保存</button>
+  </div>`);
+}
+async function saveCase(isNew){
+  const c = window._caseDraft;
+  const g = id => { const el = document.getElementById(id); return el? el.value : ''; };
+  c.team = g('cs_team'); c.entryDate = g('cs_date'); c.seqNo = parseInt(g('cs_no'))||null;
+  c.personName = g('cs_name').trim(); c.personNo = g('cs_pno').trim(); c.company = g('cs_comp').trim();
+  c.category = g('cs_cat'); c.subtype = (CASE_CATEGORIES[c.category]||[]).length? g('cs_sub') : '';
+  c.staff = g('cs_staff').trim(); c.note = g('cs_note').trim();
+  if(!c.entryDate){ toast('記入日を入力してください', true); return; }
+  if(!c.personName){ toast('人材名を入力してください', true); return; }
+  await q(sb.from('case_records').upsert(caseToDb(c)));
+  if(isNew) data.caseRecords.push(c);
+  else { const i = data.caseRecords.findIndex(x=>x.id===c.id); if(i>=0) data.caseRecords[i]=c; }
+  closeModal(); render(); toast('保存しました');
+}
+async function delCase(id){
+  if(!confirm('この案件記録を削除しますか？')) return;
+  await q(sb.from('case_records').delete().eq('id', id));
+  data.caseRecords = data.caseRecords.filter(x=>x.id!==id);
+  closeModal(); render(); toast('削除しました');
 }
 
 /* ================= 社内の許可証管理 ================= */

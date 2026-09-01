@@ -188,6 +188,53 @@ create table if not exists public.licenses (
   created_at   timestamptz not null default now()
 );
 
+-- GLT月報：案件記録（1人1行の台帳）と、月次合計・チーム目標
+-- 月報は case_records から自動集計する。記録が無い月は monthly_reports を使う。
+create table if not exists public.case_records (
+  id          uuid primary key default gen_random_uuid(),
+  team        text not null,
+  entry_date  date not null,
+  seq_no      int,
+  person_name text not null default '',
+  person_no   text default '',
+  company     text default '',
+  category    text not null,   -- 紹介／新規採用／元実習生／入社／退職
+  subtype     text default '', -- 認定／国内変更／配属／切替／転職／帰国／キャンセル
+  staff       text default '',
+  note        text default '',
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+create index if not exists case_records_idx on public.case_records (team, entry_date);
+
+create table if not exists public.monthly_reports (
+  id         uuid primary key default gen_random_uuid(),
+  year       int  not null,
+  month      int  not null check (month between 1 and 12),
+  team       text not null,
+  shokai     int not null default 0,
+  shinki     int not null default 0,
+  jisshusei  int not null default 0,
+  nyusha     int not null default 0,
+  taishoku   int not null default 0,
+  cancel     int not null default 0,
+  achieved   int,   -- 達成数。空なら 新規採用＋元実習生 で自動計算
+  note       text default '',
+  updated_at timestamptz not null default now(),
+  unique (year, month, team)
+);
+
+create table if not exists public.team_targets (
+  id             uuid primary key default gen_random_uuid(),
+  year           int  not null,
+  team           text not null,
+  existing_count int,
+  annual_target  int not null default 0,
+  q1 int not null default 0, q2 int not null default 0,
+  q3 int not null default 0, q4 int not null default 0,
+  unique (year, team)
+);
+
 grant usage on schema public to anon, authenticated;
 grant select, insert, update, delete on all tables in schema public to authenticated;
 
@@ -397,6 +444,19 @@ create policy kmt_lic_select on public.licenses for select to authenticated usin
 create policy kmt_lic_insert on public.licenses for insert to authenticated with check (public.my_rank() >= 2);
 create policy kmt_lic_update on public.licenses for update to authenticated using (public.my_rank() >= 2) with check (public.my_rank() >= 2);
 create policy kmt_lic_delete on public.licenses for delete to authenticated using (public.my_rank() >= 2);
+
+-- 月報の3テーブル：閲覧は社員以上／入力・変更は管理者以上
+do $$
+declare t text;
+begin
+  foreach t in array array['case_records','monthly_reports','team_targets'] loop
+    execute format('alter table public.%I enable row level security', t);
+    execute format('drop policy if exists kmt_%s_select on public.%I', t, t);
+    execute format('drop policy if exists kmt_%s_write  on public.%I', t, t);
+    execute format('create policy kmt_%s_select on public.%I for select to authenticated using (public.my_rank() >= 1)', t, t);
+    execute format('create policy kmt_%s_write on public.%I for all to authenticated using (public.my_rank() >= 2) with check (public.my_rank() >= 2)', t, t);
+  end loop;
+end $$;
 
 -- 5) 最初の全体管理者 -----------------------------------------------
 --    ここで登録するのはメールアドレスと権限だけです。
