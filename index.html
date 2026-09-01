@@ -71,6 +71,29 @@ main{width:100%;max-width:1280px;margin:0 auto;padding:20px;flex:1}
 .gp-month td,.gp-month th{padding:4px 8px}
 tr.gp-total td{background:var(--accent-soft);font-weight:800}
 td.center,th.center{text-align:center}
+/* ===== 期待スキル・達成率 ===== */
+.goal-chips{display:flex;gap:8px;flex-wrap:wrap}
+.goal-chip{border:1px solid var(--border);background:#fff;border-radius:10px;padding:8px 14px;
+  cursor:pointer;font-size:13px;color:var(--sub)}
+.goal-chip b{color:var(--accent);margin-left:4px}
+.goal-chip.active{border-color:var(--accent);background:var(--accent-soft);color:var(--text);font-weight:700}
+td.goal-cur{outline:2px solid var(--accent);outline-offset:-2px}
+.goal-best{font-weight:800;color:var(--accent)}
+/* ===== マンダラチャート（9×9） ===== */
+.md-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-width:980px}
+.md-block{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;background:var(--border);
+  border:1px solid var(--border);border-radius:8px;overflow:hidden;padding:3px}
+.md-cell{background:#fff;min-height:52px;padding:5px 6px;font-size:10.5px;line-height:1.4;
+  cursor:pointer;position:relative;word-break:break-word;display:flex;flex-direction:column;justify-content:center}
+.md-cell:hover{background:var(--accent-soft)}
+.md-theme{background:var(--sb-deep);color:var(--sb-on-deep);font-weight:800;text-align:center;font-size:11px}
+.md-center{background:var(--accent);color:#fff;font-weight:800;text-align:center;font-size:12px}
+.md-block-center .md-theme{background:var(--accent-soft);color:var(--accent)}
+.md-done{background:var(--ok-soft)}
+.md-done::after{content:'✓';position:absolute;top:2px;right:4px;color:var(--ok);font-weight:800}
+.md-empty{background:#faf7f5}
+.md-who{font-size:9px;color:var(--accent);font-weight:700;margin-top:2px}
+@media(max-width:860px){.md-grid{gap:4px}.md-cell{min-height:40px;font-size:9px;padding:3px}}
 /* ===== SELFing ===== */
 .sf-role{border:1px solid var(--border);border-radius:9px;padding:10px 12px;margin-bottom:8px;background:#fff}
 .sf-role-head{display:flex;align-items:center;gap:8px}
@@ -421,7 +444,9 @@ const WRITE_RANK = {allowed_users:3, departments:2, doc_templates:2, employees:2
   monthly_reports:2, team_targets:2, case_records:2,   // 月報の入力も管理者以上
   app_updates:2, app_update_reads:1,                   // 「確認しました」は本人が記録する
   role_master:2,
-  selfing_reports:1, selfing_roles:1};                 // SELFingは本人が自分の申告を書ける（RLSで自分の分に制限）
+  selfing_reports:1, selfing_roles:1,                  // SELFingは本人が自分の申告を書ける（RLSで自分の分に制限）
+  role_skill_targets:2,
+  mandala_charts:1};                                   // 個人マンダラは本人が編集できる（RLSで制限）
 
 /* ===== 評価シート2026新版 マスタ ===== */
 const EVAL_ROLES = {
@@ -489,7 +514,7 @@ const KPI_LIBRARY = [
 
 /* ---------------- state ---------------- */
 let data = {departments:[], employees:[], evaluations:[], kpis:[], assets:[], docTemplates:[], allowedUsers:[], skillDefs:[], empSkills:{}, announcements:[], annReads:[], licenses:[], monthlyReports:[], teamTargets:[], caseRecords:[], appUpdates:[], updReads:[],
-roleMaster:[], selfingReports:[], selfingRoles:[]};
+roleMaster:[], selfingReports:[], selfingRoles:[], roleSkillTargets:[], mandalaCharts:[]};
 let session = null;
 let view = 'dashboard';
 let empFilter = {q:'', status:'在籍', type:'', dept:''};
@@ -624,7 +649,7 @@ function assetToDb(a){ return {id:a.id, asset_no:a.assetNo||'', category:a.categ
 
 async function loadAll(){
   const [deps, tpls, emps, docs, evals, kpis, assets, allowed, skdefs, esk, anns, reads, lics,
-         mrep, ttg, crec, upds, urds, rmst, srep, srol] = await Promise.all([
+         mrep, ttg, crec, upds, urds, rmst, srep, srol, rst, mnd] = await Promise.all([
     q(sb.from('departments').select('*').order('sort_order')),
     q(sb.from('doc_templates').select('*').order('sort_order')),
     q(sb.from('employees').select('*')),
@@ -646,7 +671,12 @@ async function loadAll(){
     q(sb.from('role_master').select('*').order('sort_order')),
     q(sb.from('selfing_reports').select('*')),
     q(sb.from('selfing_roles').select('*').order('sort_order')),
+    q(sb.from('role_skill_targets').select('*')),
+    q(sb.from('mandala_charts').select('*')),
   ]);
+  data.roleSkillTargets = rst||[];
+  data.mandalaCharts = (mnd||[]).map(m=>({id:m.id, scope:m.scope, empId:m.employee_id,
+    period:m.period, center:m.center||'', themes:m.themes||[]}));
   data.roleMaster     = rmst||[];
   data.selfingReports = (srep||[]).map(r=>({id:r.id, empId:r.employee_id, period:r.period, status:r.status,
     capacity:r.capacity, capacityNote:r.capacity_note||'', selfComment:r.self_comment||'',
@@ -1092,7 +1122,7 @@ function annCardHtml(){
 }
 
 /* ===== サイドバー（ピンク基調・グループ折りたたみ式） ===== */
-const APP_VER = 'ver.20260901.29';
+const APP_VER = 'ver.20260901.31';
 const NAV_GROUPS = [
   {key:'jinzai', label:'人材管理',   items:[['talent','👥','タレント'],['employees','🗂','従業員・人事情報'],['selfing','🪞','SELFing'],['skills','🧭','スキル管理'],['evals','📝','評価管理']]},
   {key:'romu',   label:'労務・書類', items:[['docs','📄','労務・書類管理'],['licenses','🏛','許可証管理'],['guide','📘','手続きガイド']]},
@@ -1328,6 +1358,10 @@ function radarSvg(labels, values, size, opts){
   const axes = labels.map((_,i)=>{ const [x,y]=pt(i,max);
     return `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="#f1e5e0"/>`; }).join('');
   const poly = labels.map((_,i)=>pt(i,values[i]).map(x=>x.toFixed(1)).join(',')).join(' ');
+  /* 期待レベル（役職の目標プロフィール）を緑の破線で重ねる（アシビズの見せ方） */
+  const targetPoly = o.target
+    ? `<polygon points="${labels.map((_,i)=>pt(i,o.target[i]||0).map(x=>x.toFixed(1)).join(',')).join(' ')}"
+        fill="rgba(30,126,78,.06)" stroke="#1e7e4e" stroke-width="1.5" stroke-dasharray="5 4"/>` : '';
   const dots = labels.map((_,i)=>{ const [x,y]=pt(i,values[i]);
     return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.5" fill="#b8492e"/>`; }).join('');
   const texts = labels.map((l,i)=>{ const a=-Math.PI/2 + i*2*Math.PI/n;
@@ -1336,7 +1370,7 @@ function radarSvg(labels, values, size, opts){
     return `<text x="${x.toFixed(1)}" y="${(y+3).toFixed(1)}" text-anchor="${anchor}"
       font-size="${o.fs||10}" fill="#6b7280">${esc(l)}</text>`; }).join('');
   return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-    ${grid}${axes}
+    ${grid}${axes}${targetPoly}
     <polygon points="${poly}" fill="rgba(207,89,64,.22)" stroke="#b8492e" stroke-width="1.5"/>
     ${dots}${texts}</svg>`;
 }
@@ -1428,8 +1462,8 @@ function skillTargets(){
 }
 function viewSkills(){
   if(myRank()<1) return `<div class="panel"><h2>閲覧権限がありません</h2></div>`;
-  const subs = [['map','スキルマップ'],['input','個人スキル'],['summary','組織サマリー']];
-  if(canEdit()) subs.push(['master','スキルマスタ']);
+  const subs = [['map','スキルマップ'],['input','個人スキル'],['goal','期待スキル・達成率'],['summary','組織サマリー']];
+  if(canEdit()) subs.push(['org','役職別マトリクス'],['master','スキルマスタ']);
   if(!subs.some(s=>s[0]===skillSub)) skillSub='map';
   const lvLegend = Object.entries(SKILL_LEVELS).filter(([k])=>k>0)
     .map(([k,v])=>`${k}=${v}${skillLangEn?` / ${SKILL_LEVELS_EN[k]}`:''}`).join('　');
@@ -1446,6 +1480,8 @@ function viewSkills(){
   let body='';
   if(skillSub==='map') body = skillMapHtml();
   else if(skillSub==='input') body = skillInputHtml();
+  else if(skillSub==='goal') body = goalHtml();
+  else if(skillSub==='org') body = goalOrgHtml();
   else if(skillSub==='summary') body = skillSummaryHtml();
   else if(skillSub==='master') body = skillMasterHtml();
   return `<div class="panel">
@@ -2106,6 +2142,297 @@ async function delCase(id){
   closeModal(); render(); toast('削除しました');
 }
 
+/* ================= 期待スキル・達成率（アシビズ「期待されるスキルを明確化」） ================= */
+/* 役職ごとの目標レベル（role_skill_targets）と本人のスキル評価を比べて達成率％を出す。
+   目標は暫定値。ジョブデスク詳細が届いたら「期待レベルの編集」で調整する。 */
+const TARGET_ROLES = ['紹介営業','支援担当','マーケティング','バックオフィス'];
+let goalEmpId = '';
+let goalRole = '';
+let goalEditMode = false;
+
+function targetOfRole(role, skillId){
+  const t = data.roleSkillTargets.find(x=>x.role===role && x.skill_id===skillId);
+  return t? t.target : null;
+}
+/* 役職に対する達成率。スコア/目標を各スキルで出して平均（100%上限） */
+function roleAchievement(empId, role){
+  const ts = data.roleSkillTargets.filter(t=>t.role===role);
+  if(!ts.length) return null;
+  let sum=0, byCat={};
+  ts.forEach(t=>{
+    const s = data.skillDefs.find(x=>x.id===t.skill_id); if(!s) return;
+    const a = Math.min(skillLevelOf(empId, t.skill_id)/t.target, 1);
+    sum += a;
+    (byCat[s.category] = byCat[s.category]||[]).push(a);
+  });
+  const cats = Object.entries(byCat).map(([cat,arr])=>({cat, pct: Math.round(arr.reduce((x,y)=>x+y,0)/arr.length*100)}));
+  return {pct: Math.round(sum/ts.length*100), cats};
+}
+function goalHtml(){
+  const targets = canEdit()
+    ? skillTargets()
+    : data.employees.filter(e=>e.id===myEmpId());
+  if(!targets.length) return '<div class="muted">対象者がいません。</div>';
+  if(!goalEmpId || !targets.some(e=>e.id===goalEmpId)) goalEmpId = targets[0].id;
+  const e = empById(goalEmpId);
+  /* 4役職すべての達成率チップ（アシビズの 営業職55% マーケ30%… の見せ方） */
+  const chips = TARGET_ROLES.map(role=>{
+    const a = roleAchievement(goalEmpId, role);
+    return {role, pct: a? a.pct : 0};
+  });
+  if(!goalRole) goalRole = DEPT_ROLE[e.department] || chips.slice().sort((a,b)=>b.pct-a.pct)[0].role;
+  const cur = roleAchievement(goalEmpId, goalRole) || {pct:0, cats:[]};
+  /* レーダー：カテゴリ別の現在値と、選択役職の期待値（カテゴリ平均）を重ねる */
+  const cats = skillCats();
+  const curVals = cats.map(cat=>{
+    const defs = data.skillDefs.filter(s=>s.category===cat);
+    const sc = defs.map(s=>skillLevelOf(goalEmpId,s.id)).filter(v=>v>0);
+    return sc.length? sc.reduce((a,b)=>a+b,0)/sc.length : 0;
+  });
+  const tgtVals = cats.map(cat=>{
+    const ts = data.roleSkillTargets.filter(t=>t.role===goalRole &&
+      (data.skillDefs.find(s=>s.id===t.skill_id)||{}).category===cat);
+    return ts.length? ts.reduce((a,b)=>a+b.target,0)/ts.length : 0;
+  });
+  const radar = radarSvg(cats.map(catShort), curVals, 270, {fs:10, target:tgtVals});
+  /* 期待レベルの編集（管理者） */
+  const editTable = goalEditMode && canEdit() ? `
+    <div class="section-title" style="margin-top:16px">期待レベルの編集（${esc(goalRole)}）<span class="en">暫定値。ジョブデスク確定後に調整</span></div>
+    <div class="tablewrap"><table>
+      <tr><th>スキル</th><th class="center">期待レベル（空欄＝対象外）</th></tr>
+      ${data.skillDefs.map(s=>{
+        const t = targetOfRole(goalRole, s.id);
+        return `<tr><td>${esc(s.category)}｜${esc(s.name)}</td>
+          <td class="center"><span class="lvseg">${[0,1,2,3,4,5].map(n=>
+            `<button class="${(t||0)===n?'on':''}" onclick="setRoleTarget('${goalRole}','${s.id}',${n})">${n||'—'}</button>`).join('')}</span></td></tr>`;
+      }).join('')}
+    </table></div>`:'';
+  return `
+  <div class="toolbar">
+    ${canEdit()? `<select onchange="goalEmpId=this.value;goalRole='';render()">
+      ${targets.map(x=>`<option value="${x.id}" ${x.id===goalEmpId?'selected':''}>${esc(x.nameKanji||x.nameRoma)}${x.empNo?`（${esc(x.empNo)}）`:''}</option>`).join('')}
+    </select>`:`<b>${esc(e.nameKanji||e.nameRoma)}</b>`}
+    <div class="spacer"></div>
+    ${canEdit()? `<button class="btn small ${goalEditMode?'':'ghost'}" onclick="goalEditMode=!goalEditMode;render()">${goalEditMode?'編集を閉じる':'期待レベルを編集'}</button>`:''}
+  </div>
+  <div class="goal-chips">
+    ${chips.map(c=>`<button class="goal-chip ${goalRole===c.role?'active':''}" onclick="goalRole='${c.role}';render()">
+      ${esc(c.role)} <b>${c.pct}%</b></button>`).join('')}
+  </div>
+  <div class="grid" style="grid-template-columns:1fr 320px;gap:18px;align-items:start;margin-top:14px">
+    <div>
+      <div class="section-title">${esc(goalRole)} の達成率 <b style="color:var(--accent)">${cur.pct}%</b>
+        ${DEPT_ROLE[e.department]===goalRole? '<span class="badge b-blue">現在の役職</span>':''}</div>
+      ${cur.cats.map(c=>`
+        <div style="margin-bottom:8px;font-size:13px">
+          <div style="display:flex;justify-content:space-between">
+            <span>${esc(c.cat)}</span><b>${c.pct===100?'🏆 ':''}${c.pct}%</b></div>
+          <div class="progress"><div style="width:${c.pct}%;background:${c.pct===100?'var(--ok)':c.pct>=60?'var(--accent)':'var(--warn)'}"></div></div>
+        </div>`).join('') || '<div class="muted">この役職の期待スキルが未設定です。</div>'}
+      <p class="muted" style="margin-top:10px">達成率＝各スキルの「現在レベル ÷ 期待レベル」（上限100%）の平均。<br>
+        個人スキルのタスク採点がそのまま反映されます。期待レベルは暫定値です。</p>
+      ${editTable}
+    </div>
+    <div class="panel" style="margin:0">
+      <div class="section-title">現在地レーダー</div>
+      <div class="radar-wrap">${radar}</div>
+      <p class="muted" style="margin-top:6px">
+        <span style="color:#b8492e">━ 現在のスキル</span>／
+        <span style="color:#1e7e4e">┅ ${esc(goalRole)}の期待レベル</span></p>
+    </div>
+  </div>`;
+}
+async function setRoleTarget(role, skillId, target){
+  if(!canEdit()){ toast(denyMsg(), true); return; }
+  const cur = data.roleSkillTargets.find(t=>t.role===role && t.skill_id===skillId);
+  if(target===0){
+    if(cur){ await q(sb.from('role_skill_targets').delete().eq('id', cur.id));
+      data.roleSkillTargets = data.roleSkillTargets.filter(t=>t.id!==cur.id); }
+  } else if(cur){
+    cur.target = target;
+    await q(sb.from('role_skill_targets').update({target}).eq('id', cur.id));
+  } else {
+    const ins = await q(sb.from('role_skill_targets').insert({role, skill_id:skillId, target}).select());
+    if(ins && ins[0]) data.roleSkillTargets.push(ins[0]);
+  }
+  render();
+}
+/* 会社全体：全員×4役職の達成率マトリクス（適性発見にも使う） */
+function goalOrgHtml(){
+  const emps = skillTargets();
+  const rows = emps.map(e=>{
+    const cells = TARGET_ROLES.map(role=>{
+      const a = roleAchievement(e.id, role);
+      const pct = a? a.pct : 0;
+      const isCur = DEPT_ROLE[e.department]===role;
+      const best = TARGET_ROLES.every(r2=>{
+        const a2 = roleAchievement(e.id, r2); return (a2?a2.pct:0) <= pct; });
+      return `<td class="center ${isCur?'goal-cur':''}">
+        <span class="${best&&pct>0?'goal-best':''}">${pct}%</span></td>`;
+    }).join('');
+    return `<tr>
+      <td style="display:flex;align-items:center;gap:6px">${avatarOf(e,'sm')}<b>${esc(e.nameKanji||e.nameRoma)}</b></td>
+      ${cells}</tr>`;
+  }).join('');
+  const avgs = TARGET_ROLES.map(role=>{
+    const vals = emps.map(e=>{ const a=roleAchievement(e.id, role); return a?a.pct:0; });
+    return vals.length? Math.round(vals.reduce((a,b)=>a+b,0)/vals.length) : 0;
+  });
+  return `
+  <div class="tablewrap"><table>
+    <tr><th>氏名</th>${TARGET_ROLES.map(r=>`<th class="center">${esc(r)}</th>`).join('')}</tr>
+    ${rows}
+    <tr class="gp-total"><td>全社平均</td>${avgs.map(a=>`<td class="center"><b>${a}%</b></td>`).join('')}</tr>
+  </table></div>
+  <p class="muted" style="margin-top:8px">枠＝現在の役職（部署から判定）。<b>太字</b>＝その人の最も高い役職＝適性のヒント。
+  現在の役職と適性が違う人は、配置転換や役割追加の検討材料になります。</p>`;
+}
+
+/* ================= マンダラチャート（81マス目標） ================= */
+const MANDALA_DEFAULT_THEMES = ['営業戦略','顧客管理','マーケティング','データ分析','業務改善','組織体制','リスク管理','営業プロセス'];
+let mandalaScope = 'company';    // company | personal
+let mandalaEmpId = '';
+let mandalaPeriod = '2026年度';
+
+function currentMandala(){
+  if(mandalaScope==='company')
+    return data.mandalaCharts.find(m=>m.scope==='company' && m.period===mandalaPeriod) || null;
+  const empId = canEdit()? (mandalaEmpId || myEmpId()) : myEmpId();
+  return data.mandalaCharts.find(m=>m.scope==='personal' && m.empId===empId && m.period===mandalaPeriod) || null;
+}
+function mandalaHtml(){
+  const md = currentMandala();
+  const emps = skillTargets();
+  const canEditThis = canEdit() || (mandalaScope==='personal' && (mandalaEmpId||myEmpId())===myEmpId());
+  const head = `
+  <div class="toolbar">
+    <div class="viewseg">
+      <button class="${mandalaScope==='company'?'active':''}" onclick="mandalaScope='company';render()">会社全体</button>
+      <button class="${mandalaScope==='personal'?'active':''}" onclick="mandalaScope='personal';mandalaEmpId=myEmpId()||'';render()">個人</button>
+    </div>
+    ${mandalaScope==='personal' && canEdit()? `<select onchange="mandalaEmpId=this.value;render()">
+      ${emps.map(x=>`<option value="${x.id}" ${ (mandalaEmpId||myEmpId())===x.id?'selected':''}>${esc(x.nameKanji||x.nameRoma)}</option>`).join('')}
+    </select>`:''}
+    <input value="${esc(mandalaPeriod)}" style="width:110px" onchange="mandalaPeriod=this.value;render()">
+    <div class="spacer"></div>
+    ${md? mandalaProgressBadge(md) : ''}
+  </div>`;
+  if(!md){
+    return head + `<div class="center" style="padding:26px">
+      <p style="margin-bottom:12px">${mandalaScope==='company'?'会社全体':'この人'}の ${esc(mandalaPeriod)} マンダラチャートはまだありません。</p>
+      ${canEditThis? `<button class="btn" onclick="createMandala()">＋ 作成する（8テーマの枠から）</button>
+      <p class="muted" style="margin-top:10px">中心に大目標、周りに8テーマ、各テーマに8つの具体策 — 81マスで目標を分解します。</p>`:''}
+    </div>`;
+  }
+  /* 9×9グリッド：中央ブロック＝大目標＋テーマ見出し、周囲8ブロック＝テーマ＋8マス */
+  const T = md.themes||[];
+  const blockOrder = [0,1,2,3,-1,4,5,6,7];   // -1=中央ブロック
+  const cellOrder  = [0,1,2,3,-1,4,5,6,7];
+  const blocks = blockOrder.map(bi=>{
+    if(bi===-1){
+      /* 中央ブロック：真ん中に大目標、周囲にテーマ名 */
+      const cells = cellOrder.map(ci=>{
+        if(ci===-1) return `<div class="md-cell md-center" ${canEditThis?`onclick="editMandalaCenter()"`:''}>${esc(md.center||'（大目標）')}</div>`;
+        const th = T[ci]||{};
+        return `<div class="md-cell md-theme">${esc(th.title||MANDALA_DEFAULT_THEMES[ci]||'')}</div>`;
+      }).join('');
+      return `<div class="md-block md-block-center">${cells}</div>`;
+    }
+    const th = T[bi]||{title:MANDALA_DEFAULT_THEMES[bi]||'', cells:[]};
+    const cells = cellOrder.map(ci=>{
+      if(ci===-1) return `<div class="md-cell md-theme" ${canEditThis?`onclick="editMandalaTheme(${bi})"`:''}>${esc(th.title||'')}</div>`;
+      const c = (th.cells||[])[ci]||{};
+      const who = c.who? `<span class="md-who">${esc(c.who)}</span>`:'';
+      return `<div class="md-cell ${c.done?'md-done':''} ${c.t?'':'md-empty'}"
+        ${canEditThis?`onclick="editMandalaCell(${bi},${ci})"`:''}>${esc(c.t||'')}${who}</div>`;
+    }).join('');
+    return `<div class="md-block">${cells}</div>`;
+  }).join('');
+  /* 個人の貢献（会社チャート）：担当マス数と達成数 */
+  let contrib = '';
+  if(mandalaScope==='company'){
+    const counts = {};
+    T.forEach(th=>(th.cells||[]).forEach(c=>{
+      if(c && c.who){ const k=c.who; (counts[k]=counts[k]||{total:0,done:0}); counts[k].total++; if(c.done) counts[k].done++; }
+    }));
+    const rows = Object.entries(counts).sort((a,b)=>b[1].total-a[1].total);
+    if(rows.length) contrib = `
+      <div class="section-title" style="margin-top:14px">個人の貢献（担当マス）</div>
+      <div class="tablewrap"><table style="max-width:460px">
+        <tr><th>担当</th><th class="center">担当マス</th><th class="center">達成</th><th style="min-width:120px">進捗</th></tr>
+        ${rows.map(([who,c])=>`<tr><td><b>${esc(who)}</b></td><td class="center">${c.total}</td>
+          <td class="center">${c.done}</td>
+          <td><div class="progress"><div style="width:${c.total?Math.round(c.done/c.total*100):0}%"></div></div></td></tr>`).join('')}
+      </table></div>`;
+  }
+  return head + `<div class="md-grid">${blocks}</div>
+  <p class="muted" style="margin-top:8px">マスをクリックして編集：内容・達成✓${mandalaScope==='company'?'・担当者':''}。テーマ名・大目標もクリックで変更できます。</p>
+  ${contrib}`;
+}
+function mandalaProgressBadge(md){
+  let total=0, done=0;
+  (md.themes||[]).forEach(th=>(th.cells||[]).forEach(c=>{ if(c&&c.t){ total++; if(c.done) done++; } }));
+  return total? `<span class="badge ${done===total?'b-green':'b-blue'}">達成 ${done}/${total}マス（${Math.round(done/total*100)}%）</span>` : '';
+}
+async function createMandala(){
+  const themes = MANDALA_DEFAULT_THEMES.map(t=>({title:t, cells:Array.from({length:8},()=>({t:'',done:false,who:''}))}));
+  const row = {scope:mandalaScope, period:mandalaPeriod, center:'', themes,
+    employee_id: mandalaScope==='personal'? (canEdit()? (mandalaEmpId||myEmpId()) : myEmpId()) : null};
+  const ins = await q(sb.from('mandala_charts').insert(row).select());
+  if(ins && ins[0]) data.mandalaCharts.push({id:ins[0].id, scope:row.scope, empId:row.employee_id,
+    period:row.period, center:'', themes});
+  render();
+}
+async function saveMandala(md){
+  await q(sb.from('mandala_charts').update({center:md.center, themes:md.themes,
+    updated_at:new Date().toISOString()}).eq('id', md.id));
+}
+function editMandalaCenter(){
+  const md = currentMandala(); if(!md) return;
+  const v = prompt('大目標（中心のマス）', md.center||''); if(v===null) return;
+  md.center = v; saveMandala(md); render();
+}
+function editMandalaTheme(i){
+  const md = currentMandala(); if(!md) return;
+  if(!md.themes[i]) md.themes[i] = {title:'', cells:Array.from({length:8},()=>({t:'',done:false,who:''}))};
+  const v = prompt('テーマ名', md.themes[i].title||''); if(v===null) return;
+  md.themes[i].title = v; saveMandala(md); render();
+}
+function editMandalaCell(bi, ci){
+  const md = currentMandala(); if(!md) return;
+  if(!md.themes[bi]) md.themes[bi] = {title:MANDALA_DEFAULT_THEMES[bi]||'', cells:Array.from({length:8},()=>({t:'',done:false,who:''}))};
+  if(!md.themes[bi].cells[ci]) md.themes[bi].cells[ci] = {t:'',done:false,who:''};
+  const c = md.themes[bi].cells[ci];
+  const emps = skillTargets();
+  modal(`
+  <h3>${esc(md.themes[bi].title)} — 具体策の編集</h3>
+  <div class="field"><label>内容</label>
+    <textarea id="md_t" rows="3" style="width:100%">${esc(c.t||'')}</textarea></div>
+  <div class="formgrid" style="margin-top:10px">
+    ${mandalaScope==='company'? `<div><label>担当者</label>
+      <select id="md_who"><option value="">（未定）</option>
+        ${emps.map(e=>{const n=e.nameKanji||e.nameRoma;
+          return `<option ${c.who===n?'selected':''}>${esc(n)}</option>`;}).join('')}
+      </select></div>`:''}
+    <div><label>達成</label><select id="md_done">
+      <option value="0" ${c.done?'':'selected'}>未達成</option>
+      <option value="1" ${c.done?'selected':''}>✓ 達成</option></select></div>
+  </div>
+  <div class="modal-actions">
+    <button class="btn ghost" onclick="closeModal()">キャンセル</button>
+    <button class="btn" onclick="saveMandalaCell(${bi},${ci})">保存</button>
+  </div>`);
+}
+async function saveMandalaCell(bi, ci){
+  const md = currentMandala(); if(!md) return;
+  const c = md.themes[bi].cells[ci];
+  c.t = document.getElementById('md_t').value.trim();
+  const w = document.getElementById('md_who'); if(w) c.who = w.value;
+  c.done = document.getElementById('md_done').value==='1';
+  await saveMandala(md);
+  closeModal(); render();
+}
+
 /* ================= SELFing（役割と貢献の自己申告） ================= */
 /* アシビズ（Human Academy assist for business）のSELFingを参考に、KMT向けに再設計。
    スキルではなく「いま担っている役割（ジョブデスク）と実績」を本人が申告し、
@@ -2152,6 +2479,7 @@ function viewSelfing(){
   const subs = [['my','自分の申告']];
   if(canEdit()) subs.push(['review','メンバー確認'],['balance','バランスマップ'],['compare','スキル×余力 比較']);
   else subs.push(['compare','スキル×余力 比較']);
+  subs.push(['mandala','マンダラ目標']);
   if(!subs.some(s=>s[0]===selfingSub)) selfingSub='my';
   return `
   <div class="panel">
@@ -2169,6 +2497,7 @@ function viewSelfing(){
     ${selfingSub==='my'? selfingMyHtml()
      : selfingSub==='review'? selfingReviewHtml()
      : selfingSub==='balance'? selfingBalanceHtml()
+     : selfingSub==='mandala'? mandalaHtml()
      : selfingCompareHtml()}
   </div>`;
 }

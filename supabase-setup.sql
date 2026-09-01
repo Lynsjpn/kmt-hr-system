@@ -271,6 +271,26 @@ create table if not exists public.selfing_roles (
   sort_order  int default 0
 );
 
+-- 役職別の期待スキル（達成率の分母）と、マンダラチャート（81マス目標）
+create table if not exists public.role_skill_targets (
+  id       uuid primary key default gen_random_uuid(),
+  role     text not null,
+  skill_id text not null references public.skill_defs(id) on delete cascade,
+  target   int  not null check (target between 1 and 5),
+  unique (role, skill_id)
+);
+create table if not exists public.mandala_charts (
+  id          uuid primary key default gen_random_uuid(),
+  scope       text not null default 'personal',
+  employee_id uuid references public.employees(id) on delete cascade,
+  period      text not null,
+  center      text not null default '',
+  themes      jsonb not null default '[]'::jsonb,
+  updated_at  timestamptz not null default now()
+);
+create unique index if not exists mandala_company_uidx  on public.mandala_charts (period) where scope='company';
+create unique index if not exists mandala_personal_uidx on public.mandala_charts (employee_id, period) where scope='personal';
+
 grant usage on schema public to anon, authenticated;
 grant select, insert, update, delete on all tables in schema public to authenticated;
 
@@ -555,6 +575,24 @@ drop trigger if exists guard_selfing_roles_trg   on public.selfing_roles;
 drop trigger if exists guard_selfing_reports_trg on public.selfing_reports;
 create trigger guard_selfing_roles_trg   before update on public.selfing_roles   for each row execute function public.guard_selfing_mgr_fields();
 create trigger guard_selfing_reports_trg before update on public.selfing_reports for each row execute function public.guard_selfing_mgr_fields();
+
+-- role_skill_targets / mandala_charts のRLS
+alter table public.role_skill_targets enable row level security;
+alter table public.mandala_charts     enable row level security;
+drop policy if exists kmt_rst_select on public.role_skill_targets;
+drop policy if exists kmt_rst_write  on public.role_skill_targets;
+create policy kmt_rst_select on public.role_skill_targets for select to authenticated using (public.my_rank() >= 1);
+create policy kmt_rst_write  on public.role_skill_targets for all to authenticated
+  using (public.my_rank() >= 2) with check (public.my_rank() >= 2);
+drop policy if exists kmt_md_select on public.mandala_charts;
+drop policy if exists kmt_md_write  on public.mandala_charts;
+create policy kmt_md_select on public.mandala_charts for select to authenticated
+  using (scope='company' and public.my_rank()>=1
+      or public.my_rank()>=2
+      or employee_id = public.my_employee_id());
+create policy kmt_md_write on public.mandala_charts for all to authenticated
+  using (public.my_rank()>=2 or (scope='personal' and employee_id = public.my_employee_id()))
+  with check (public.my_rank()>=2 or (scope='personal' and employee_id = public.my_employee_id()));
 
 -- 5) 最初の全体管理者 -----------------------------------------------
 --    ここで登録するのはメールアドレスと権限だけです。
