@@ -20,7 +20,8 @@
   --sb-on-deep:#7a3520;    /* ピーチ地の上の文字色。白だと読めないため濃い茶にする */
 }
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:"Hiragino Kaku Gothic ProN","Yu Gothic UI","Meiryo",sans-serif;background:var(--bg);color:var(--text);font-size:14px}
+/* フォントは KMT業務管理システム と同じ指定に合わせている（両システムで見た目を揃えるため） */
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);font-size:14px}
 /* ===== 左サイドバー・レイアウト ===== */
 .app{display:flex;min-height:100vh}
 aside#sidebar{width:var(--sb-w);flex-shrink:0;background:var(--sb-bg);border-right:1px solid var(--border);
@@ -70,6 +71,24 @@ main{width:100%;max-width:1280px;margin:0 auto;padding:20px;flex:1}
 .gp-month td,.gp-month th{padding:4px 8px}
 tr.gp-total td{background:var(--accent-soft);font-weight:800}
 td.center,th.center{text-align:center}
+/* ===== アップデート履歴（この画面のアップデート＋右上トースト） ===== */
+.upd-panel{background:#fff;border:1px solid var(--border);border-left:4px solid var(--accent);
+  border-radius:10px;padding:12px 16px;margin-bottom:14px;font-size:13px}
+.upd-head{display:flex;align-items:center;gap:8px;font-weight:800;margin-bottom:8px}
+.upd-item{padding:6px 0;border-top:1px dashed var(--border)}
+.upd-item:first-of-type{border-top:none}
+.upd-item.unread{background:var(--accent-soft);border-radius:6px;padding:8px 10px;margin:4px -4px}
+.upd-ver{font-weight:700;color:var(--accent)}
+.upd-more{display:inline-block;margin-top:8px;font-size:12px;color:var(--accent)}
+#updToast{position:fixed;top:16px;right:16px;z-index:80;max-width:340px}
+.upd-toast{background:#2b1d17;color:#fff;border-radius:12px;padding:14px 16px;
+  box-shadow:0 12px 32px rgba(0,0,0,.35);animation:banner-in .3s ease-out;position:relative}
+.upd-toast .x{position:absolute;top:8px;right:10px;background:none;border:none;color:#fff;
+  opacity:.7;font-size:14px;cursor:pointer}
+.upd-toast .t{font-weight:800;font-size:13px;margin-bottom:6px}
+.upd-toast .b{font-size:12px;opacity:.9;line-height:1.6;margin-bottom:10px}
+.upd-toast .btn{background:var(--accent);color:#fff;font-size:12px;padding:6px 14px}
+@media(max-width:700px){#updToast{left:12px;right:12px;max-width:none}}
 /* 画面上部の更新バナー（見落とし防止のため大きく出す） */
 .update-banner{position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:12px;
   background:linear-gradient(100deg,#1e7e4e,#2f9e69);color:#fff;border-radius:10px;
@@ -391,7 +410,8 @@ const WRITE_RANK = {allowed_users:3, departments:2, doc_templates:2, employees:2
   announcements:2,        // お知らせの投稿・削除は管理者以上
   announcement_reads:1,   // 「確認しました」は本人（社員以上）が記録する
   licenses:2,             // 会社の許可証は管理者以上のみ編集
-  monthly_reports:2, team_targets:2, case_records:2};  // 月報の入力も管理者以上
+  monthly_reports:2, team_targets:2, case_records:2,   // 月報の入力も管理者以上
+  app_updates:2, app_update_reads:1};                  // 「確認しました」は本人が記録する
 
 /* ===== 評価シート2026新版 マスタ ===== */
 const EVAL_ROLES = {
@@ -458,7 +478,7 @@ const KPI_LIBRARY = [
 ];
 
 /* ---------------- state ---------------- */
-let data = {departments:[], employees:[], evaluations:[], kpis:[], assets:[], docTemplates:[], allowedUsers:[], skillDefs:[], empSkills:{}, announcements:[], annReads:[], licenses:[], monthlyReports:[], teamTargets:[], caseRecords:[]};
+let data = {departments:[], employees:[], evaluations:[], kpis:[], assets:[], docTemplates:[], allowedUsers:[], skillDefs:[], empSkills:{}, announcements:[], annReads:[], licenses:[], monthlyReports:[], teamTargets:[], caseRecords:[], appUpdates:[], updReads:[]};
 let session = null;
 let view = 'dashboard';
 let empFilter = {q:'', status:'在籍', type:'', dept:''};
@@ -593,7 +613,7 @@ function assetToDb(a){ return {id:a.id, asset_no:a.assetNo||'', category:a.categ
 
 async function loadAll(){
   const [deps, tpls, emps, docs, evals, kpis, assets, allowed, skdefs, esk, anns, reads, lics,
-         mrep, ttg, crec] = await Promise.all([
+         mrep, ttg, crec, upds, urds] = await Promise.all([
     q(sb.from('departments').select('*').order('sort_order')),
     q(sb.from('doc_templates').select('*').order('sort_order')),
     q(sb.from('employees').select('*')),
@@ -610,7 +630,11 @@ async function loadAll(){
     q(sb.from('monthly_reports').select('*')),
     q(sb.from('team_targets').select('*')),
     q(sb.from('case_records').select('*').order('entry_date', {ascending:false})),
+    q(sb.from('app_updates').select('*').order('released_on', {ascending:false})),
+    q(sb.from('app_update_reads').select('*')),
   ]);
+  data.appUpdates = upds||[];
+  data.updReads   = urds||[];
   data.monthlyReports = (mrep||[]).map(r=>({year:r.year, month:r.month, team:r.team,
     shokai:r.shokai, shinki:r.shinki, jisshusei:r.jisshusei, nyusha:r.nyusha,
     taishoku:r.taishoku, cancel:r.cancel, achieved:r.achieved}));
@@ -885,6 +909,70 @@ async function checkAppVersion(manual){
 }
 function applyUpdate(){ location.reload(); }
 
+/* --- 1b) アップデート履歴（業務管理システムと同じ「この画面のアップデート」方式）---
+   バージョン比較ではなく「未読の更新履歴があるか」で出すので、
+   ページを開き直しても必ず気づける。 */
+let updToastClosed = false;
+let updShowAll = false;
+function updUnread(){
+  const em = myEmail();
+  return (data.appUpdates||[]).filter(u =>
+    !(data.updReads||[]).some(r => r.update_id===u.id && (r.email||'').toLowerCase()===em));
+}
+function updItemsHtml(u){
+  return `<ul style="margin:4px 0 0 18px;line-height:1.8">
+    ${(u.items||[]).map(t=>`<li>${esc(t)}</li>`).join('')}</ul>`;
+}
+/* 画面上部に出す「このシステムのアップデート」パネル */
+function updPanelHtml(){
+  const all = (data.appUpdates||[]).slice()
+    .sort((a,b)=> (b.released_on||'').localeCompare(a.released_on||'') || (b.version||'').localeCompare(a.version||''));
+  if(!all.length) return '';
+  const unread = updUnread();
+  const shown = updShowAll ? all : all.slice(0, unread.length ? unread.length : 1);
+  const rest = all.length - shown.length;
+  return `
+  <div class="upd-panel">
+    <div class="upd-head">
+      📖 このシステムのアップデート
+      ${unread.length? `<span class="badge b-red">新着 ${unread.length}件</span>`:''}
+      <div class="spacer"></div>
+      ${unread.length? `<button class="btn small" onclick="markUpdRead()">確認しました</button>`:''}
+    </div>
+    ${shown.map(u=>`
+      <div class="upd-item ${updUnread().some(x=>x.id===u.id)?'unread':''}">
+        <div class="upd-ver">${esc(u.version)}　<span class="muted">${esc(u.released_on)}</span>
+          ${esc(u.title)}</div>
+        ${updItemsHtml(u)}
+      </div>`).join('')}
+    ${rest>0 || updShowAll? `<a class="upd-more" href="javascript:updShowAll=${!updShowAll};render()">
+      ${updShowAll? '▲ 折りたたむ' : `▼ これまでのアップデート（${rest}件）を見る`}</a>`:''}
+  </div>`;
+}
+/* 右上に出るトースト */
+function updToastHtml(){
+  const unread = updUnread();
+  if(!unread.length || updToastClosed) return '';
+  const u = unread[0];
+  return `
+  <div class="upd-toast">
+    <button class="x" onclick="updToastClosed=true;render()" title="閉じる">✕</button>
+    <div class="t">📢 アップデートのお知らせ</div>
+    <div class="b">${esc(u.title)}${unread.length>1? `　他${unread.length-1}件`:''}</div>
+    <button class="btn" onclick="updToastClosed=true;go('dashboard');window.scrollTo(0,0)">詳細を見る</button>
+  </div>`;
+}
+async function markUpdRead(){
+  const em = myEmail();
+  const unread = updUnread();
+  if(!unread.length) return;
+  const rows = unread.map(u=>({update_id:u.id, email:em}));
+  await q(sb.from('app_update_reads').upsert(rows));
+  rows.forEach(r=>data.updReads.push(r));
+  updToastClosed = true;
+  render(); toast('確認しました');
+}
+
 /* --- 2) お知らせ（管理者が投稿、利用者ごとに既読管理） --- */
 function annVisible(){
   return (data.announcements||[]).filter(a=>a.active);
@@ -982,7 +1070,7 @@ function annCardHtml(){
 }
 
 /* ===== サイドバー（ピンク基調・グループ折りたたみ式） ===== */
-const APP_VER = 'ver.20260901.27';
+const APP_VER = 'ver.20260901.28';
 const NAV_GROUPS = [
   {key:'jinzai', label:'人材管理',   items:[['talent','👥','タレント'],['employees','🗂','従業員・人事情報'],['skills','🧭','スキル管理'],['evals','📝','評価管理']]},
   {key:'romu',   label:'労務・書類', items:[['docs','📄','労務・書類管理'],['licenses','🏛','許可証管理'],['guide','📘','手続きガイド']]},
@@ -1090,9 +1178,18 @@ function render(){
   else if(view==='guide') m.innerHTML = viewGuide();
   else if(view==='users') m.innerHTML = viewUsers();
   else if(view==='data') m.innerHTML = viewData();
-  /* 更新バナーは全画面共通で最上部に差し込む */
-  const b = updateBannerHtml();
+  /* 更新バナー・アップデート履歴は全画面共通で最上部に差し込む */
+  const b = updateBannerHtml() + (view==='dashboard' ? updPanelHtml() : '');
   if(b) m.insertAdjacentHTML('afterbegin', b);
+  /* 右上のトーストは画面の外側に置く（スクロールしても付いてくる） */
+  const old = document.getElementById('updToast');
+  if(old) old.remove();
+  const th = updToastHtml();
+  if(th){
+    const d = document.createElement('div');
+    d.id = 'updToast'; d.innerHTML = th;
+    document.body.appendChild(d);
+  }
 }
 
 /* ================= タレント・スキル（カオナビ型） ================= */
