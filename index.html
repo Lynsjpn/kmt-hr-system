@@ -34,6 +34,7 @@ main{width:100%;max-width:1280px;margin:0 auto;padding:20px;flex:1}
   color:var(--accent);font-weight:900;font-size:20px;letter-spacing:1px;box-shadow:0 2px 8px rgba(0,0,0,.15)}
 .sb-brand h1{font-size:15px;font-weight:800;line-height:1.4}
 .sb-brand .ver{font-size:10px;opacity:.85;text-decoration:underline;margin-top:2px;display:inline-block;color:var(--sb-on-deep)}
+.sb-brand .vercheck{font-size:9px;opacity:.7;color:var(--sb-on-deep);margin-top:2px}
 /* ユーザー行 */
 .sb-user{display:flex;align-items:center;gap:6px;font-size:12px;padding:4px 6px;margin-bottom:8px}
 .sb-user .dot{width:8px;height:8px;border-radius:50%;background:#2ecc71;flex-shrink:0}
@@ -981,7 +982,7 @@ function annCardHtml(){
 }
 
 /* ===== サイドバー（ピンク基調・グループ折りたたみ式） ===== */
-const APP_VER = 'ver.20260901.26';
+const APP_VER = 'ver.20260901.27';
 const NAV_GROUPS = [
   {key:'jinzai', label:'人材管理',   items:[['talent','👥','タレント'],['employees','🗂','従業員・人事情報'],['skills','🧭','スキル管理'],['evals','📝','評価管理']]},
   {key:'romu',   label:'労務・書類', items:[['docs','📄','労務・書類管理'],['licenses','🏛','許可証管理'],['guide','📘','手続きガイド']]},
@@ -1026,8 +1027,10 @@ function renderNav(){
     <div class="sb-brand">
       <div class="logo">KMT</div>
       <h1>KMT 人事管理システム</h1>
-      <a class="ver" href="javascript:checkAppVersion(true)"
-         title="クリックで更新の有無を確認します${verCheckedAt? '（最終確認 '+verCheckedAt.toLocaleTimeString('ja-JP')+'）':''}">${APP_VER}</a>
+      <a class="ver" href="javascript:checkAppVersion(true)" title="クリックで更新の有無を確認します">${APP_VER}</a>
+      <div class="vercheck">${verCheckedAt
+        ? '更新確認 '+verCheckedAt.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})+' ✓'
+        : '更新を自動確認します'}</div>
     </div>
     <div class="sb-user">
       <span class="dot"></span><b title="${esc(myEmail())}">${esc(uname)}（${esc(myRole())}）</b><span class="st">アクティブ</span>
