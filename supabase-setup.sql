@@ -235,6 +235,42 @@ create table if not exists public.team_targets (
   unique (year, team)
 );
 
+-- SELFing（役割と貢献の自己申告。アシビズ参考）
+-- 役割マスタ／期ごとの申告（1人1期1枚）／申告内の役割
+create table if not exists public.role_master (
+  id             uuid primary key default gen_random_uuid(),
+  name           text not null,
+  axis_default   text not null default '顧客満足',
+  skill_category text default '',
+  sort_order     int default 0
+);
+create table if not exists public.selfing_reports (
+  id            uuid primary key default gen_random_uuid(),
+  employee_id   uuid not null references public.employees(id) on delete cascade,
+  period        text not null,
+  status        text not null default '入力中',
+  capacity      int,
+  capacity_note text default '',
+  self_comment  text default '',
+  mgr_comment   text default '',
+  submitted_at  timestamptz,
+  reviewed_at   timestamptz,
+  updated_at    timestamptz not null default now(),
+  unique (employee_id, period)
+);
+create table if not exists public.selfing_roles (
+  id          uuid primary key default gen_random_uuid(),
+  report_id   uuid not null references public.selfing_reports(id) on delete cascade,
+  role_name   text not null,
+  axis        text not null default '顧客満足',
+  weight      int  not null default 0 check (weight between 0 and 100),
+  self_score  int check (self_score between 1 and 5),
+  self_result text default '',
+  mgr_score   int check (mgr_score between 1 and 5),
+  mgr_note    text default '',
+  sort_order  int default 0
+);
+
 grant usage on schema public to anon, authenticated;
 grant select, insert, update, delete on all tables in schema public to authenticated;
 
@@ -457,6 +493,68 @@ begin
     execute format('create policy kmt_%s_write on public.%I for all to authenticated using (public.my_rank() >= 2) with check (public.my_rank() >= 2)', t, t);
   end loop;
 end $$;
+
+-- SELFing のRLS：社員は自分の申告のみ読み書き可。上司評価欄はトリガーで保護
+create or replace function public.my_employee_id()
+returns uuid language sql stable security definer set search_path = public as $$
+  select id from public.employees
+  where lower(coalesce(email,'')) = lower(auth.jwt() ->> 'email') limit 1;
+$$;
+revoke all on function public.my_employee_id() from public, anon;
+grant execute on function public.my_employee_id() to authenticated;
+
+alter table public.role_master     enable row level security;
+alter table public.selfing_reports enable row level security;
+alter table public.selfing_roles   enable row level security;
+
+drop policy if exists kmt_rm_select on public.role_master;
+drop policy if exists kmt_rm_write  on public.role_master;
+create policy kmt_rm_select on public.role_master for select to authenticated using (public.my_rank() >= 1);
+create policy kmt_rm_write  on public.role_master for all to authenticated
+  using (public.my_rank() >= 2) with check (public.my_rank() >= 2);
+
+drop policy if exists kmt_sr_select on public.selfing_reports;
+drop policy if exists kmt_sr_write  on public.selfing_reports;
+create policy kmt_sr_select on public.selfing_reports for select to authenticated
+  using (public.my_rank() >= 2 or employee_id = public.my_employee_id());
+create policy kmt_sr_write on public.selfing_reports for all to authenticated
+  using (public.my_rank() >= 2 or employee_id = public.my_employee_id())
+  with check (public.my_rank() >= 2 or employee_id = public.my_employee_id());
+
+drop policy if exists kmt_sl_select on public.selfing_roles;
+drop policy if exists kmt_sl_write  on public.selfing_roles;
+create policy kmt_sl_select on public.selfing_roles for select to authenticated
+  using (public.my_rank() >= 2 or exists(
+    select 1 from public.selfing_reports r
+    where r.id = report_id and r.employee_id = public.my_employee_id()));
+create policy kmt_sl_write on public.selfing_roles for all to authenticated
+  using (public.my_rank() >= 2 or exists(
+    select 1 from public.selfing_reports r
+    where r.id = report_id and r.employee_id = public.my_employee_id()))
+  with check (public.my_rank() >= 2 or exists(
+    select 1 from public.selfing_reports r
+    where r.id = report_id and r.employee_id = public.my_employee_id()));
+
+-- 社員が上司評価の欄を書き換えられないようにする（値をold値で上書き）
+create or replace function public.guard_selfing_mgr_fields()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if public.my_rank() < 2 then
+    if tg_table_name = 'selfing_roles' then
+      new.mgr_score := old.mgr_score;
+      new.mgr_note  := old.mgr_note;
+    elsif tg_table_name = 'selfing_reports' then
+      new.mgr_comment := old.mgr_comment;
+      new.reviewed_at := old.reviewed_at;
+      if old.status = '上司確認済' then new.status := old.status; end if;
+    end if;
+  end if;
+  return new;
+end $$;
+drop trigger if exists guard_selfing_roles_trg   on public.selfing_roles;
+drop trigger if exists guard_selfing_reports_trg on public.selfing_reports;
+create trigger guard_selfing_roles_trg   before update on public.selfing_roles   for each row execute function public.guard_selfing_mgr_fields();
+create trigger guard_selfing_reports_trg before update on public.selfing_reports for each row execute function public.guard_selfing_mgr_fields();
 
 -- 5) 最初の全体管理者 -----------------------------------------------
 --    ここで登録するのはメールアドレスと権限だけです。

@@ -71,6 +71,14 @@ main{width:100%;max-width:1280px;margin:0 auto;padding:20px;flex:1}
 .gp-month td,.gp-month th{padding:4px 8px}
 tr.gp-total td{background:var(--accent-soft);font-weight:800}
 td.center,th.center{text-align:center}
+/* ===== SELFing ===== */
+.sf-role{border:1px solid var(--border);border-radius:9px;padding:10px 12px;margin-bottom:8px;background:#fff}
+.sf-role-head{display:flex;align-items:center;gap:8px}
+.sf-role-body{display:flex;gap:18px;flex-wrap:wrap;margin-top:8px;font-size:12px;align-items:center}
+.sf-role-body label{display:flex;align-items:center;gap:6px;color:var(--sub)}
+.sf-role-body input[type=number]{padding:4px 6px;border:1px solid var(--border);border-radius:6px}
+.sf-cap{border:1px solid var(--border);border-radius:9px;padding:12px;background:#fff;font-size:13px}
+.sf-cap input[type=range]{width:220px;vertical-align:middle;margin:0 8px}
 /* ===== アップデート履歴（この画面のアップデート＋右上トースト） ===== */
 .upd-panel{background:#fff;border:1px solid var(--border);border-left:4px solid var(--accent);
   border-radius:10px;padding:12px 16px;margin-bottom:14px;font-size:13px}
@@ -411,7 +419,9 @@ const WRITE_RANK = {allowed_users:3, departments:2, doc_templates:2, employees:2
   announcement_reads:1,   // 「確認しました」は本人（社員以上）が記録する
   licenses:2,             // 会社の許可証は管理者以上のみ編集
   monthly_reports:2, team_targets:2, case_records:2,   // 月報の入力も管理者以上
-  app_updates:2, app_update_reads:1};                  // 「確認しました」は本人が記録する
+  app_updates:2, app_update_reads:1,                   // 「確認しました」は本人が記録する
+  role_master:2,
+  selfing_reports:1, selfing_roles:1};                 // SELFingは本人が自分の申告を書ける（RLSで自分の分に制限）
 
 /* ===== 評価シート2026新版 マスタ ===== */
 const EVAL_ROLES = {
@@ -478,7 +488,8 @@ const KPI_LIBRARY = [
 ];
 
 /* ---------------- state ---------------- */
-let data = {departments:[], employees:[], evaluations:[], kpis:[], assets:[], docTemplates:[], allowedUsers:[], skillDefs:[], empSkills:{}, announcements:[], annReads:[], licenses:[], monthlyReports:[], teamTargets:[], caseRecords:[], appUpdates:[], updReads:[]};
+let data = {departments:[], employees:[], evaluations:[], kpis:[], assets:[], docTemplates:[], allowedUsers:[], skillDefs:[], empSkills:{}, announcements:[], annReads:[], licenses:[], monthlyReports:[], teamTargets:[], caseRecords:[], appUpdates:[], updReads:[],
+roleMaster:[], selfingReports:[], selfingRoles:[]};
 let session = null;
 let view = 'dashboard';
 let empFilter = {q:'', status:'在籍', type:'', dept:''};
@@ -613,7 +624,7 @@ function assetToDb(a){ return {id:a.id, asset_no:a.assetNo||'', category:a.categ
 
 async function loadAll(){
   const [deps, tpls, emps, docs, evals, kpis, assets, allowed, skdefs, esk, anns, reads, lics,
-         mrep, ttg, crec, upds, urds] = await Promise.all([
+         mrep, ttg, crec, upds, urds, rmst, srep, srol] = await Promise.all([
     q(sb.from('departments').select('*').order('sort_order')),
     q(sb.from('doc_templates').select('*').order('sort_order')),
     q(sb.from('employees').select('*')),
@@ -632,7 +643,17 @@ async function loadAll(){
     q(sb.from('case_records').select('*').order('entry_date', {ascending:false})),
     q(sb.from('app_updates').select('*').order('released_on', {ascending:false})),
     q(sb.from('app_update_reads').select('*')),
+    q(sb.from('role_master').select('*').order('sort_order')),
+    q(sb.from('selfing_reports').select('*')),
+    q(sb.from('selfing_roles').select('*').order('sort_order')),
   ]);
+  data.roleMaster     = rmst||[];
+  data.selfingReports = (srep||[]).map(r=>({id:r.id, empId:r.employee_id, period:r.period, status:r.status,
+    capacity:r.capacity, capacityNote:r.capacity_note||'', selfComment:r.self_comment||'',
+    mgrComment:r.mgr_comment||'', submittedAt:r.submitted_at, reviewedAt:r.reviewed_at}));
+  data.selfingRoles   = (srol||[]).map(r=>({id:r.id, reportId:r.report_id, roleName:r.role_name,
+    axis:r.axis, weight:r.weight, selfScore:r.self_score, selfResult:r.self_result||'',
+    mgrScore:r.mgr_score, mgrNote:r.mgr_note||'', sortOrder:r.sort_order||0}));
   data.appUpdates = upds||[];
   data.updReads   = urds||[];
   data.monthlyReports = (mrep||[]).map(r=>({year:r.year, month:r.month, team:r.team,
@@ -866,6 +887,7 @@ const NAV = [
   ['employees','従業員・人事情報',1],
   ['docs','労務・書類管理',1],
   ['licenses','許可証管理',1],
+  ['selfing','SELFing',1],
   ['evals','評価管理',1],
   ['skills','スキル管理',1],
   ['geppo','GLT月報',1],
@@ -1072,7 +1094,7 @@ function annCardHtml(){
 /* ===== サイドバー（ピンク基調・グループ折りたたみ式） ===== */
 const APP_VER = 'ver.20260901.28';
 const NAV_GROUPS = [
-  {key:'jinzai', label:'人材管理',   items:[['talent','👥','タレント'],['employees','🗂','従業員・人事情報'],['skills','🧭','スキル管理'],['evals','📝','評価管理']]},
+  {key:'jinzai', label:'人材管理',   items:[['talent','👥','タレント'],['employees','🗂','従業員・人事情報'],['selfing','🪞','SELFing'],['skills','🧭','スキル管理'],['evals','📝','評価管理']]},
   {key:'romu',   label:'労務・書類', items:[['docs','📄','労務・書類管理'],['licenses','🏛','許可証管理'],['guide','📘','手続きガイド']]},
   {key:'keiei',  label:'経営管理',   items:[['geppo','🗓','GLT月報'],['kpi','📈','KPI管理'],['assets','💼','資産管理']]},
   {key:'system', label:'設定',       items:[['users','👤','ユーザー管理'],['data','⚙️','データ管理']]},
@@ -1170,6 +1192,7 @@ function render(){
   else if(view==='skills') m.innerHTML = viewSkills();
   else if(view==='licenses') m.innerHTML = viewLicenses();
   else if(view==='geppo') m.innerHTML = viewGeppo();
+  else if(view==='selfing') m.innerHTML = viewSelfing();
   else if(view==='employees') m.innerHTML = currentEmpId? viewEmpDetail(currentEmpId) : viewEmployees();
   else if(view==='docs') m.innerHTML = viewDocs();
   else if(view==='evals') m.innerHTML = viewEvals();
@@ -2081,6 +2104,413 @@ async function delCase(id){
   await q(sb.from('case_records').delete().eq('id', id));
   data.caseRecords = data.caseRecords.filter(x=>x.id!==id);
   closeModal(); render(); toast('削除しました');
+}
+
+/* ================= SELFing（役割と貢献の自己申告） ================= */
+/* アシビズ（Human Academy assist for business）のSELFingを参考に、KMT向けに再設計。
+   スキルではなく「いま担っている役割（ジョブデスク）と実績」を本人が申告し、
+   上司が貢献度を評価。会社のバランス（売上×顧客満足）を俯瞰し、
+   スキル評価・余力と突き合わせる。 */
+const SELF_AXES = ['売上','顧客満足','両方','社内支援'];
+const AXIS_COLORS = {'売上':'#b8492e','顧客満足':'#1e7e4e','両方':'#7c3aed','社内支援':'#82675c'};
+const SELF_SCORE_LABEL = {1:'あまり果たせていない',2:'一部果たせている',3:'概ね果たせている',4:'十分果たせている',5:'期待以上に果たせている'};
+const CAPACITY_LABEL = c => c==null? '—' : c>=110? '限界を超えている' : c>=95? 'ほぼ限界' : c>=80? 'ちょうど良い' : c>=60? '少し余裕がある' : 'かなり余裕がある';
+
+let selfingSub = 'my';          // my | review | balance | compare
+let selfingPeriod = '2026下期';
+let selfingEmpId = '';          // review/compare の対象
+
+function selfingPeriods(){
+  const ps = new Set(data.selfingReports.map(r=>r.period));
+  ps.add('2026下期'); ps.add('2027上期');
+  return [...ps].sort().reverse();
+}
+function myReport(period){
+  const myId = myEmpId();
+  return data.selfingReports.find(r=>r.empId===myId && r.period===period) || null;
+}
+function reportRoles(reportId){
+  return data.selfingRoles.filter(r=>r.reportId===reportId).sort((a,b)=>a.sortOrder-b.sortOrder);
+}
+/* 役割ごとの貢献ポイント＝担当割合 × 評点（上司評価があればそれを優先）。
+   軸「両方」は売上・顧客満足に半分ずつ配分する。 */
+function contribOf(report){
+  const roles = reportRoles(report.id);
+  const c = {売上:0, 顧客満足:0, 社内支援:0, total:0};
+  roles.forEach(r=>{
+    const score = r.mgrScore || r.selfScore || 0;
+    const pt = (r.weight||0) * score / 100;      // 最大5
+    if(r.axis==='両方'){ c.売上 += pt/2; c.顧客満足 += pt/2; }
+    else if(c[r.axis]!=null) c[r.axis] += pt;
+    c.total += pt;
+  });
+  return c;
+}
+
+function viewSelfing(){
+  if(myRank()<1) return '<div class="panel"><h2>閲覧権限がありません</h2></div>';
+  const subs = [['my','自分の申告']];
+  if(canEdit()) subs.push(['review','メンバー確認'],['balance','バランスマップ'],['compare','スキル×余力 比較']);
+  else subs.push(['compare','スキル×余力 比較']);
+  if(!subs.some(s=>s[0]===selfingSub)) selfingSub='my';
+  return `
+  <div class="panel">
+    <h2>SELFing <span class="en">役割と貢献の自己申告 — いま何を担い、どれだけ果たせているか</span></h2>
+    <div class="toolbar">
+      <div class="viewseg">
+        ${subs.map(([k,l])=>`<button class="${selfingSub===k?'active':''}" onclick="selfingSub='${k}';render()">${l}</button>`).join('')}
+      </div>
+      <select onchange="selfingPeriod=this.value;render()">
+        ${selfingPeriods().map(p=>`<option ${selfingPeriod===p?'selected':''}>${esc(p)}</option>`).join('')}
+      </select>
+      <div class="spacer"></div>
+      <span class="muted">評点：${Object.entries(SELF_SCORE_LABEL).map(([k,v])=>`${k}=${v}`).join('　')}</span>
+    </div>
+    ${selfingSub==='my'? selfingMyHtml()
+     : selfingSub==='review'? selfingReviewHtml()
+     : selfingSub==='balance'? selfingBalanceHtml()
+     : selfingCompareHtml()}
+  </div>`;
+}
+
+/* ---- 1) 自分の申告 ---- */
+function selfingMyHtml(){
+  const myId = myEmpId();
+  if(!myId) return `<div class="muted">あなたのログインメール（${esc(myEmail())}）に対応する従業員データがありません。
+    管理者に「従業員・人事情報」のメール欄の設定を依頼してください。</div>`;
+  const rep = myReport(selfingPeriod);
+  if(!rep){
+    return `<div class="center" style="padding:30px">
+      <p style="margin-bottom:14px">${esc(selfingPeriod)} の申告はまだ作成されていません。</p>
+      <button class="btn" onclick="createSelfing()">＋ ${esc(selfingPeriod)} の申告を始める</button>
+      <p class="muted" style="margin-top:14px">いま担っている役割（ジョブデスク）を選び、仕事時間に占める割合と<br>
+      「どれだけ果たせているか」を自分で申告します。スキルの話ではなく、実際の仕事と成果の話です。</p>
+    </div>`;
+  }
+  const roles = reportRoles(rep.id);
+  const totalW = roles.reduce((s,r)=>s+(r.weight||0),0);
+  const locked = rep.status==='上司確認済';
+  const c = contribOf(rep);
+  return `
+  ${locked? `<div class="alert-item blue" style="margin-bottom:12px"><b>上司確認済</b><span>この申告は確認済のためロックされています。変更が必要な場合は管理者に依頼してください。</span></div>`:''}
+  <div class="grid" style="grid-template-columns:1fr 300px;align-items:start;gap:16px">
+    <div>
+      <div class="section-title">担っている役割（合計が100%になるように）</div>
+      ${roles.map(r=>`
+        <div class="sf-role">
+          <div class="sf-role-head">
+            <span class="badge" style="background:${AXIS_COLORS[r.axis]}22;color:${AXIS_COLORS[r.axis]}">${esc(r.axis)}</span>
+            <b>${esc(r.roleName)}</b>
+            <div class="spacer"></div>
+            ${locked?'':`<button class="btn small ghost" onclick="delSelfRole('${r.id}')">✕</button>`}
+          </div>
+          <div class="sf-role-body">
+            <label>担当割合
+              <input type="number" min="0" max="100" value="${r.weight||0}" ${locked?'disabled':''}
+                onchange="updSelfRole('${r.id}','weight',+this.value)" style="width:64px"> %</label>
+            <label>自己評価
+              <span class="lvseg">${[1,2,3,4,5].map(n=>
+                `<button class="${r.selfScore===n?'on':''}" ${locked?'disabled':''}
+                  title="${SELF_SCORE_LABEL[n]}" onclick="updSelfRole('${r.id}','selfScore',${n})">${n}</button>`).join('')}</span></label>
+            ${r.mgrScore? `<label>上司評価 <b style="color:var(--accent)">${r.mgrScore}</b>${r.mgrNote?` <span class="muted">${esc(r.mgrNote)}</span>`:''}</label>`:''}
+          </div>
+          <input value="${esc(r.selfResult)}" placeholder="いまの実績・成果（例：月○件対応、担当企業○社、成約○名）" ${locked?'disabled':''}
+            onchange="updSelfRole('${r.id}','selfResult',this.value)" style="width:100%;margin-top:6px">
+        </div>`).join('') || '<div class="muted" style="margin-bottom:10px">まだ役割がありません。下から追加してください。</div>'}
+      ${locked?'':`
+      <div class="toolbar" style="margin-top:10px">
+        <select id="sf_newrole">
+          ${data.roleMaster.map(m=>`<option value="${m.id}">${esc(m.name)}（${esc(m.axis_default)}）</option>`).join('')}
+          <option value="__free">✏️ 自由入力…</option>
+        </select>
+        <button class="btn small" onclick="addSelfRole('${rep.id}')">＋ 役割を追加</button>
+        <span class="${totalW===100?'muted':'badge b-red'}">合計 ${totalW}%${totalW===100?'':'（100%にしてください）'}</span>
+      </div>`}
+      <div class="section-title" style="margin-top:18px">余力（時間・エネルギー）</div>
+      <div class="sf-cap">
+        <label>いまの稼働率（体感）：
+          <input type="range" min="30" max="120" step="5" value="${rep.capacity==null?80:rep.capacity}" ${locked?'disabled':''}
+            oninput="this.nextElementSibling.textContent=this.value+'%（'+CAPACITY_LABEL(+this.value)+'）'"
+            onchange="updSelfReport('${rep.id}','capacity',+this.value)">
+          <b>${rep.capacity==null?'80':rep.capacity}%（${CAPACITY_LABEL(rep.capacity==null?80:rep.capacity)}）</b></label>
+        <input value="${esc(rep.capacityNote)}" placeholder="補足（例：金曜午後は比較的余裕がある／月末は請求で手一杯）" ${locked?'disabled':''}
+          onchange="updSelfReport('${rep.id}','capacityNote',this.value)" style="width:100%;margin-top:8px">
+      </div>
+      <div class="section-title" style="margin-top:18px">自由記入</div>
+      <textarea rows="3" style="width:100%" ${locked?'disabled':''} placeholder="やってみたい役割、手放したい役割、気になっていること など"
+        onchange="updSelfReport('${rep.id}','selfComment',this.value)">${esc(rep.selfComment)}</textarea>
+      ${rep.mgrComment? `<div class="section-title" style="margin-top:14px">上司からのコメント</div>
+        <div class="alert-item blue">${esc(rep.mgrComment)}</div>`:''}
+      ${locked?'':`
+      <div style="margin-top:16px;display:flex;gap:10px;align-items:center">
+        <button class="btn" onclick="submitSelfing('${rep.id}')" ${totalW===100?'':'disabled title="担当割合の合計を100%にしてください"'}>
+          ${rep.status==='提出済'?'再提出する':'提出する'}</button>
+        <span class="badge ${rep.status==='提出済'?'b-green':'b-gray'}">${esc(rep.status)}</span>
+      </div>`}
+    </div>
+    <div class="panel" style="margin:0">
+      <div class="section-title">あなたの貢献バランス</div>
+      ${selfingBarsHtml(c)}
+      <p class="muted" style="margin-top:8px">担当割合 × 評点（上司評価があればそちら）で計算。<br>最大5ポイント。</p>
+    </div>
+  </div>`;
+}
+function selfingBarsHtml(c){
+  const rows = [['売上','売上への貢献'],['顧客満足','顧客満足への貢献'],['社内支援','社内を回す貢献']];
+  return rows.map(([k,l])=>`
+    <div style="margin-bottom:8px;font-size:12px">
+      <div style="display:flex;justify-content:space-between"><span>${l}</span><b>${c[k].toFixed(2)}</b></div>
+      <div class="progress"><div style="width:${Math.min(c[k]/5*100,100)}%;background:${AXIS_COLORS[k==='社内支援'?'社内支援':k]}"></div></div>
+    </div>`).join('');
+}
+
+/* ---- CRUD ---- */
+async function createSelfing(){
+  const myId = myEmpId(); if(!myId) return;
+  const row = {employee_id:myId, period:selfingPeriod, status:'入力中', capacity:80};
+  const ins = await q(sb.from('selfing_reports').insert(row).select());
+  if(ins && ins[0]) data.selfingReports.push({id:ins[0].id, empId:myId, period:selfingPeriod,
+    status:'入力中', capacity:80, capacityNote:'', selfComment:'', mgrComment:''});
+  render();
+}
+async function addSelfRole(reportId){
+  const sel = document.getElementById('sf_newrole');
+  let name, axis = '顧客満足';
+  if(sel.value==='__free'){
+    name = prompt('役割名を入力してください（例：ベトナム語の通訳サポート）');
+    if(!name) return;
+    axis = prompt('貢献軸を入力：売上／顧客満足／両方／社内支援', '顧客満足') || '顧客満足';
+    if(!SELF_AXES.includes(axis)) axis='顧客満足';
+  } else {
+    const m = data.roleMaster.find(x=>x.id===sel.value); if(!m) return;
+    name = m.name; axis = m.axis_default;
+  }
+  const maxOrder = Math.max(0, ...reportRoles(reportId).map(r=>r.sortOrder||0));
+  const row = {report_id:reportId, role_name:name, axis, weight:0, sort_order:maxOrder+1};
+  const ins = await q(sb.from('selfing_roles').insert(row).select());
+  if(ins && ins[0]) data.selfingRoles.push({id:ins[0].id, reportId, roleName:name, axis,
+    weight:0, selfScore:null, selfResult:'', mgrScore:null, mgrNote:'', sortOrder:maxOrder+1});
+  render();
+}
+async function updSelfRole(id, field, val){
+  const r = data.selfingRoles.find(x=>x.id===id); if(!r) return;
+  r[field] = val;
+  const dbmap = {weight:'weight', selfScore:'self_score', selfResult:'self_result', mgrScore:'mgr_score', mgrNote:'mgr_note', axis:'axis'};
+  const patch = {}; patch[dbmap[field]] = val;
+  await q(sb.from('selfing_roles').update(patch).eq('id', id));
+  render();
+}
+async function delSelfRole(id){
+  await q(sb.from('selfing_roles').delete().eq('id', id));
+  data.selfingRoles = data.selfingRoles.filter(x=>x.id!==id);
+  render();
+}
+async function updSelfReport(id, field, val){
+  const r = data.selfingReports.find(x=>x.id===id); if(!r) return;
+  r[field] = val;
+  const dbmap = {capacity:'capacity', capacityNote:'capacity_note', selfComment:'self_comment', mgrComment:'mgr_comment', status:'status'};
+  const patch = {}; patch[dbmap[field]] = val;
+  await q(sb.from('selfing_reports').update(patch).eq('id', id));
+  if(field!=='capacity') render();
+}
+async function submitSelfing(id){
+  const r = data.selfingReports.find(x=>x.id===id); if(!r) return;
+  r.status = '提出済';
+  await q(sb.from('selfing_reports').update({status:'提出済', submitted_at:new Date().toISOString()}).eq('id', id));
+  render(); toast('提出しました。上司の確認をお待ちください');
+}
+
+/* ---- 2) メンバー確認（上司） ---- */
+function selfingReviewHtml(){
+  const targets = data.employees.filter(e=>e.status==='在籍' && !isFamilyRec(e))
+    .sort((a,b)=>(a.empNo||'zzz').localeCompare(b.empNo||'zzz'));
+  const rows = targets.map(e=>{
+    const rep = data.selfingReports.find(r=>r.empId===e.id && r.period===selfingPeriod);
+    const c = rep? contribOf(rep) : null;
+    return `<tr class="clickable" onclick="selfingEmpId='${e.id}';openSelfingReview('${e.id}')">
+      <td style="display:flex;align-items:center;gap:6px">${avatarOf(e,'sm')}<b>${esc(e.nameKanji||e.nameRoma)}</b></td>
+      <td>${rep? `<span class="badge ${rep.status==='上司確認済'?'b-green':rep.status==='提出済'?'b-yellow':'b-gray'}">${esc(rep.status)}</span>` : '<span class="badge b-red">未作成</span>'}</td>
+      <td class="center">${rep? reportRoles(rep.id).length : '—'}</td>
+      <td class="center">${c? c.売上.toFixed(1) : '—'}</td>
+      <td class="center">${c? c.顧客満足.toFixed(1) : '—'}</td>
+      <td class="center">${rep && rep.capacity!=null? rep.capacity+'%' : '—'}</td>
+    </tr>`;
+  }).join('');
+  return `<div class="tablewrap"><table>
+    <tr><th>氏名</th><th>状態</th><th class="center">役割数</th><th class="center">売上貢献</th><th class="center">顧客満足</th><th class="center">稼働率</th></tr>
+    ${rows}</table></div>
+  <p class="muted" style="margin-top:8px">行をクリックすると、申告の確認と上司評価の入力ができます。</p>`;
+}
+function openSelfingReview(empId){
+  const e = empById(empId); if(!e) return;
+  const rep = data.selfingReports.find(r=>r.empId===empId && r.period===selfingPeriod);
+  if(!rep){ toast('この期の申告はまだ作成されていません', true); return; }
+  const roles = reportRoles(rep.id);
+  modal(`
+  <h3>${esc(e.nameKanji||e.nameRoma)} — ${esc(selfingPeriod)} の申告</h3>
+  <div class="muted" style="margin-bottom:10px">稼働率 ${rep.capacity!=null?rep.capacity+'%（'+CAPACITY_LABEL(rep.capacity)+'）':'未申告'}
+    ${rep.capacityNote?`／${esc(rep.capacityNote)}`:''}</div>
+  ${roles.map(r=>`
+    <div class="sf-role">
+      <div class="sf-role-head">
+        <span class="badge" style="background:${AXIS_COLORS[r.axis]}22;color:${AXIS_COLORS[r.axis]}">${esc(r.axis)}</span>
+        <b>${esc(r.roleName)}</b><span class="muted">${r.weight||0}%</span>
+        <div class="spacer"></div>
+        <span class="muted">本人評価 <b>${r.selfScore||'—'}</b></span>
+      </div>
+      ${r.selfResult?`<div class="muted" style="margin:4px 0">実績：${esc(r.selfResult)}</div>`:''}
+      <div style="display:flex;gap:10px;align-items:center;margin-top:6px">
+        <span style="font-size:12px">上司評価</span>
+        <span class="lvseg">${[1,2,3,4,5].map(n=>
+          `<button class="${r.mgrScore===n?'on':''}" title="${SELF_SCORE_LABEL[n]}"
+            onclick="updSelfRole('${r.id}','mgrScore',${n});openSelfingReview('${empId}')">${n}</button>`).join('')}</span>
+        <input value="${esc(r.mgrNote)}" placeholder="ひとことメモ" style="flex:1"
+          onchange="updSelfRole('${r.id}','mgrNote',this.value)">
+      </div>
+    </div>`).join('') || '<div class="muted">役割が登録されていません。</div>'}
+  ${rep.selfComment?`<div class="section-title">本人の自由記入</div><div class="alert-item blue">${esc(rep.selfComment)}</div>`:''}
+  <div class="field" style="margin-top:10px"><label>上司コメント（本人に表示されます）</label>
+    <textarea rows="3" style="width:100%" onchange="updSelfReport('${rep.id}','mgrComment',this.value)">${esc(rep.mgrComment)}</textarea></div>
+  <div class="modal-actions">
+    <button class="btn ghost" onclick="closeModal()">閉じる</button>
+    ${rep.status!=='上司確認済'? `<button class="btn" onclick="confirmSelfing('${rep.id}')">確認済にする</button>`
+      : '<span class="badge b-green" style="align-self:center">確認済</span>'}
+  </div>`);
+}
+async function confirmSelfing(id){
+  const r = data.selfingReports.find(x=>x.id===id); if(!r) return;
+  r.status='上司確認済';
+  await q(sb.from('selfing_reports').update({status:'上司確認済', reviewed_at:new Date().toISOString()}).eq('id', id));
+  closeModal(); render(); toast('確認済にしました');
+}
+
+/* ---- 3) バランスマップ（会社の売上×顧客満足バランス） ---- */
+function selfingBalanceHtml(){
+  const reps = data.selfingReports.filter(r=>r.period===selfingPeriod && r.status!=='入力中');
+  if(!reps.length) return '<div class="muted">この期の提出済み申告がまだありません。</div>';
+  const pts = reps.map(r=>{
+    const e = empById(r.empId); if(!e) return null;
+    const c = contribOf(r);
+    return {e, r, c};
+  }).filter(Boolean);
+  const W=520, H=420, pad=48;
+  const max = Math.max(2.5, ...pts.map(p=>Math.max(p.c.売上, p.c.顧客満足))) * 1.15;
+  const X = v => pad + v/max*(W-pad*2);
+  const Y = v => H-pad - v/max*(H-pad*2);
+  const dots = pts.map(p=>{
+    const cap = p.r.capacity==null? 80 : p.r.capacity;
+    const rad = 8 + Math.max(0, (120-cap))/8;          // 余力があるほど大きい＝動かせる人
+    const col = cap>=100? '#c0392b' : cap>=85? '#b7791f' : '#1e7e4e';
+    const name = (p.e.nameKanji||p.e.nameRoma).split(/\s/)[0];
+    return `<g>
+      <circle cx="${X(p.c.売上)}" cy="${Y(p.c.顧客満足)}" r="${rad}" fill="${col}" fill-opacity=".75">
+        <title>${esc(p.e.nameKanji||p.e.nameRoma)}
+売上 ${p.c.売上.toFixed(2)}／顧客満足 ${p.c.顧客満足.toFixed(2)}／社内支援 ${p.c.社内支援.toFixed(2)}
+稼働率 ${cap}%（${CAPACITY_LABEL(cap)}）</title>
+      </circle>
+      <text x="${X(p.c.売上)}" y="${Y(p.c.顧客満足)-rad-4}" text-anchor="middle" font-size="10" fill="var(--text)">${esc(name)}</text>
+    </g>`;
+  }).join('');
+  const sum = {売上:0, 顧客満足:0, 社内支援:0};
+  pts.forEach(p=>{ sum.売上+=p.c.売上; sum.顧客満足+=p.c.顧客満足; sum.社内支援+=p.c.社内支援; });
+  const bal = sum.売上+sum.顧客満足>0 ? Math.round(sum.売上/(sum.売上+sum.顧客満足)*100) : 50;
+  return `
+  <div class="grid" style="grid-template-columns:auto 1fr;gap:18px;align-items:start">
+    <div class="radar-wrap">
+      <svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="max-width:100%">
+        <line x1="${pad}" y1="${H-pad}" x2="${W-pad}" y2="${H-pad}" stroke="var(--border)"/>
+        <line x1="${pad}" y1="${pad}" x2="${pad}" y2="${H-pad}" stroke="var(--border)"/>
+        <line x1="${pad}" y1="${H-pad}" x2="${W-pad}" y2="${pad}" stroke="var(--border)" stroke-dasharray="4 4"/>
+        <text x="${W/2}" y="${H-12}" text-anchor="middle" font-size="12" fill="var(--sub)">売上への貢献 →</text>
+        <text x="16" y="${H/2}" font-size="12" fill="var(--sub)" transform="rotate(-90 16 ${H/2})" text-anchor="middle">顧客満足への貢献 →</text>
+        ${dots}
+      </svg>
+    </div>
+    <div>
+      <div class="section-title">会社全体のバランス</div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;font-size:13px">
+        <span style="color:${AXIS_COLORS['売上']}">売上 ${bal}%</span>
+        <div class="progress" style="flex:1"><div style="width:${bal}%;background:${AXIS_COLORS['売上']}"></div></div>
+        <span style="color:${AXIS_COLORS['顧客満足']}">顧客満足 ${100-bal}%</span>
+      </div>
+      <p class="muted">点線より左上＝顧客満足寄り、右下＝売上寄り。<br>
+      ●の大きさ＝余力（大きいほど時間・エネルギーに余裕）。<br>
+      色：<span style="color:#1e7e4e">緑=余裕あり</span>／<span style="color:#b7791f">黄=ほぼ限界</span>／<span style="color:#c0392b">赤=限界超え</span></p>
+      <div class="section-title" style="margin-top:14px">合計ポイント</div>
+      <table style="max-width:280px">
+        <tr><td>売上</td><td class="center"><b>${sum.売上.toFixed(1)}</b></td></tr>
+        <tr><td>顧客満足</td><td class="center"><b>${sum.顧客満足.toFixed(1)}</b></td></tr>
+        <tr><td>社内支援</td><td class="center"><b>${sum.社内支援.toFixed(1)}</b></td></tr>
+      </table>
+    </div>
+  </div>`;
+}
+
+/* ---- 4) スキル×余力 比較 ---- */
+function selfingCompareHtml(){
+  const targets = canEdit()
+    ? data.employees.filter(e=>e.status==='在籍' && !isFamilyRec(e)).sort((a,b)=>(a.empNo||'zzz').localeCompare(b.empNo||'zzz'))
+    : data.employees.filter(e=>e.id===myEmpId());
+  if(!targets.length) return '<div class="muted">対象者がいません。</div>';
+  if(!selfingEmpId || !targets.some(e=>e.id===selfingEmpId)) selfingEmpId = targets[0].id;
+  const e = empById(selfingEmpId);
+  const rep = data.selfingReports.find(r=>r.empId===selfingEmpId && r.period===selfingPeriod);
+  const roles = rep? reportRoles(rep.id) : [];
+  /* 役割 → role_master の skill_category → そのカテゴリのスキル平均と比較 */
+  const rows = roles.map(r=>{
+    const m = data.roleMaster.find(x=>x.name===r.roleName);
+    const cat = m? m.skill_category : '';
+    let skillAvg = null;
+    if(cat){
+      const defs = data.skillDefs.filter(s=>s.category===cat);
+      const scores = defs.map(s=>skillLevelOf(selfingEmpId, s.id)).filter(v=>v>0);
+      if(scores.length) skillAvg = scores.reduce((a,b)=>a+b,0)/scores.length;
+    }
+    const roleScore = r.mgrScore || r.selfScore || null;
+    let gap = '—', gapCls = 'b-gray';
+    if(roleScore!=null && skillAvg!=null){
+      const d = skillAvg - roleScore;
+      if(d >= 1)      { gap = 'スキルに余裕（もっと任せられる）'; gapCls='b-green'; }
+      else if(d <= -1){ gap = 'スキル不足の恐れ（育成・支援が必要）'; gapCls='b-red'; }
+      else            { gap = '釣り合っている'; gapCls='b-blue'; }
+    } else if(roleScore!=null && skillAvg==null && cat){
+      gap = 'スキル未評価'; gapCls='b-yellow';
+    }
+    return `<tr>
+      <td><span class="badge" style="background:${AXIS_COLORS[r.axis]}22;color:${AXIS_COLORS[r.axis]}">${esc(r.axis)}</span> ${esc(r.roleName)}</td>
+      <td class="center">${r.weight||0}%</td>
+      <td class="center">${roleScore||'—'}</td>
+      <td class="center">${skillAvg!=null? skillAvg.toFixed(1) : '—'}</td>
+      <td><span class="badge ${gapCls}">${gap}</span></td>
+    </tr>`;
+  }).join('');
+  /* 逆方向：スキルは高いのに担っていない役割（活かしどころ） */
+  const usedCats = new Set(roles.map(r=>{ const m=data.roleMaster.find(x=>x.name===r.roleName); return m? m.skill_category : ''; }));
+  const unused = skillCats().map(cat=>{
+    const defs = data.skillDefs.filter(s=>s.category===cat);
+    const scores = defs.map(s=>skillLevelOf(selfingEmpId, s.id)).filter(v=>v>0);
+    const avg = scores.length? scores.reduce((a,b)=>a+b,0)/scores.length : 0;
+    return {cat, avg};
+  }).filter(x=>x.avg>=3.5 && !usedCats.has(x.cat));
+  const cap = rep && rep.capacity!=null ? rep.capacity : null;
+  return `
+  <div class="toolbar">
+    ${canEdit()? `<select onchange="selfingEmpId=this.value;render()">
+      ${targets.map(x=>`<option value="${x.id}" ${x.id===selfingEmpId?'selected':''}>${esc(x.nameKanji||x.nameRoma)}${x.empNo?`（${esc(x.empNo)}）`:''}</option>`).join('')}
+    </select>` : `<b>${esc(e.nameKanji||e.nameRoma)}</b>`}
+    ${cap!=null? `<span class="badge ${cap>=100?'b-red':cap>=85?'b-yellow':'b-green'}">稼働率 ${cap}%（${CAPACITY_LABEL(cap)}）</span>`:''}
+  </div>
+  ${!rep? `<div class="muted">${esc(selfingPeriod)} の申告がまだありません。</div>` : `
+  <div class="section-title">役割 × スキルの突き合わせ</div>
+  <div class="tablewrap"><table>
+    <tr><th>役割</th><th class="center">担当%</th><th class="center">役割の評点</th><th class="center">対応スキル平均</th><th>診断</th></tr>
+    ${rows || '<tr><td colspan="5" class="muted">役割が登録されていません。</td></tr>'}
+  </table></div>
+  ${unused.length? `
+  <div class="section-title" style="margin-top:14px">💡 活かせていないスキル</div>
+  <p class="muted" style="margin-bottom:6px">スキル評価は高い（平均3.5以上）のに、いまの役割に入っていない分野です${cap!=null&&cap<85?'。余力もあるため、役割の追加を検討できます':''}。</p>
+  <div class="tag-row">${unused.map(x=>`<span class="badge b-green">${esc(x.cat)}（スキル平均 ${x.avg.toFixed(1)}）</span>`).join('')}</div>`:''}
+  `}`;
 }
 
 /* ================= 社内の許可証管理 ================= */
