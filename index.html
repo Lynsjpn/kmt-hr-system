@@ -756,9 +756,13 @@ let verWatchStarted = false;
 function startVersionWatch(){
   if(verWatchStarted) return;
   verWatchStarted = true;
-  setTimeout(checkAppVersion, 30000);
-  setInterval(checkAppVersion, 10*60*1000);
+  setTimeout(checkAppVersion, 10000);        // 起動10秒後
+  setInterval(checkAppVersion, 3*60*1000);   // 以降3分ごと
   window.addEventListener('focus', ()=>{ if(!newVerAvailable) checkAppVersion(); });
+  /* タブを裏にして戻したときも確認する（focus だけでは拾えない場合がある） */
+  document.addEventListener('visibilitychange', ()=>{
+    if(document.visibilityState==='visible' && !newVerAvailable) checkAppVersion();
+  });
 }
 /* 新しいDBで初回ログインしたとき、書類マスタと部署マスタを自動投入する */
 async function autoSeed(){
@@ -856,16 +860,27 @@ function navAllowed(key){
    公開中のindex.htmlを取得して APP_VER を比べる。変わっていれば「新しいバージョン」を案内する。
    （GitHub Pagesは静的配信のため、ページ自身を読み直すのが最も確実） */
 let newVerAvailable = '';
-async function checkAppVersion(){
+let verCheckedAt = null;
+async function checkAppVersion(manual){
   try{
     const res = await fetch(location.pathname + '?vcheck=' + Date.now(), {cache:'no-store'});
     if(!res.ok) return;
     const txt = await res.text();
     const m = txt.match(/APP_VER\s*=\s*'([^']+)'/);
+    verCheckedAt = new Date();
     if(m && m[1] && m[1] !== APP_VER){
-      if(newVerAvailable !== m[1]){ newVerAvailable = m[1]; renderNav(); toast('新しいバージョンがあります'); }
+      if(newVerAvailable !== m[1]){
+        newVerAvailable = m[1];
+        /* render() を呼ぶこと。renderNav() だけだとサイドバーしか描き直されず、
+           画面上部の大きなバナーが出ない（実際にこれで通知が見えていなかった）。 */
+        render();
+        toast('新しいバージョンがあります');
+      }
+    } else if(manual){
+      toast('最新版を使用中です（' + APP_VER + '）');
+      renderNav();
     }
-  }catch(e){ /* オフライン等は無視して次回に任せる */ }
+  }catch(e){ if(manual) toast('更新の確認に失敗しました', true); }
 }
 function applyUpdate(){ location.reload(); }
 
@@ -966,7 +981,7 @@ function annCardHtml(){
 }
 
 /* ===== サイドバー（ピンク基調・グループ折りたたみ式） ===== */
-const APP_VER = 'ver.20260901.25';
+const APP_VER = 'ver.20260901.26';
 const NAV_GROUPS = [
   {key:'jinzai', label:'人材管理',   items:[['talent','👥','タレント'],['employees','🗂','従業員・人事情報'],['skills','🧭','スキル管理'],['evals','📝','評価管理']]},
   {key:'romu',   label:'労務・書類', items:[['docs','📄','労務・書類管理'],['licenses','🏛','許可証管理'],['guide','📘','手続きガイド']]},
@@ -1011,7 +1026,8 @@ function renderNav(){
     <div class="sb-brand">
       <div class="logo">KMT</div>
       <h1>KMT 人事管理システム</h1>
-      <a class="ver" href="javascript:reloadData()" title="クリックで最新データを再取得">${APP_VER}</a>
+      <a class="ver" href="javascript:checkAppVersion(true)"
+         title="クリックで更新の有無を確認します${verCheckedAt? '（最終確認 '+verCheckedAt.toLocaleTimeString('ja-JP')+'）':''}">${APP_VER}</a>
     </div>
     <div class="sb-user">
       <span class="dot"></span><b title="${esc(myEmail())}">${esc(uname)}（${esc(myRole())}）</b><span class="st">アクティブ</span>
