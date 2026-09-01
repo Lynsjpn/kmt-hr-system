@@ -291,6 +291,29 @@ create table if not exists public.mandala_charts (
 create unique index if not exists mandala_company_uidx  on public.mandala_charts (period) where scope='company';
 create unique index if not exists mandala_personal_uidx on public.mandala_charts (employee_id, period) where scope='personal';
 
+-- ジョブディスクリプション（職務チェック）
+-- jd_items＝業務項目のマスタ（社内のジョブディスクリプション2023年版が出発点）
+-- jd_checks＝本人が期ごとに付ける 〇／△／× の記録
+create table if not exists public.jd_items (
+  id         uuid primary key default gen_random_uuid(),
+  block      text not null,                 -- A/B/C/D（JD_BLOCKS）
+  item       text not null,
+  skill_id   text references public.skill_defs(id) on delete set null,
+  flag       text default '',               -- '' | old（制度が変わった）| chk（社内で要確認）| new（追加案）
+  note       text default '',
+  active     boolean not null default true,
+  sort_order int default 0
+);
+create table if not exists public.jd_checks (
+  id          uuid primary key default gen_random_uuid(),
+  employee_id uuid not null references public.employees(id) on delete cascade,
+  period      text not null,
+  item_id     uuid not null references public.jd_items(id) on delete cascade,
+  mark        text not null check (mark in ('〇','△','×')),
+  updated_at  timestamptz not null default now(),
+  unique (employee_id, period, item_id)
+);
+
 grant usage on schema public to anon, authenticated;
 grant select, insert, update, delete on all tables in schema public to authenticated;
 
@@ -593,6 +616,24 @@ create policy kmt_md_select on public.mandala_charts for select to authenticated
 create policy kmt_md_write on public.mandala_charts for all to authenticated
   using (public.my_rank()>=2 or (scope='personal' and employee_id = public.my_employee_id()))
   with check (public.my_rank()>=2 or (scope='personal' and employee_id = public.my_employee_id()));
+
+-- jd_items / jd_checks のRLS
+--   項目マスタは社員以上が閲覧、管理者以上だけが編集。
+--   チェックは本人と管理者だけが読み書きできる（他人の職務チェックは見えない）。
+alter table public.jd_items  enable row level security;
+alter table public.jd_checks enable row level security;
+drop policy if exists kmt_jdi_select on public.jd_items;
+drop policy if exists kmt_jdi_write  on public.jd_items;
+create policy kmt_jdi_select on public.jd_items for select to authenticated using (public.my_rank() >= 1);
+create policy kmt_jdi_write  on public.jd_items for all to authenticated
+  using (public.my_rank() >= 2) with check (public.my_rank() >= 2);
+drop policy if exists kmt_jdc_select on public.jd_checks;
+drop policy if exists kmt_jdc_write  on public.jd_checks;
+create policy kmt_jdc_select on public.jd_checks for select to authenticated
+  using (public.my_rank() >= 2 or employee_id = public.my_employee_id());
+create policy kmt_jdc_write on public.jd_checks for all to authenticated
+  using (public.my_rank() >= 2 or employee_id = public.my_employee_id())
+  with check (public.my_rank() >= 2 or employee_id = public.my_employee_id());
 
 -- 5) 最初の全体管理者 -----------------------------------------------
 --    ここで登録するのはメールアドレスと権限だけです。

@@ -262,6 +262,12 @@ button.btn.ghost{background:#fff;color:var(--sub);border:1px solid var(--border)
 .lvseg button{width:30px;height:26px;border:1px solid var(--border);background:#fff;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700;color:var(--sub)}
 .lvseg button.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .radar-wrap{display:flex;justify-content:center}
+/* 職務チェック（ジョブディスクリプション）の一覧 */
+table.jd td{font-size:13px;vertical-align:middle}
+table.jd td:last-child{width:110px;white-space:nowrap}
+table.jd .badge{margin-left:6px}
+.small{font-size:11px}
+.nowrap{white-space:nowrap}
 /* 英語併記（日本語の横に淡色の英語） */
 .en{font-size:11px;color:var(--sub);font-weight:400}
 th .en{display:block;font-weight:400}
@@ -446,7 +452,8 @@ const WRITE_RANK = {allowed_users:3, departments:2, doc_templates:2, employees:2
   role_master:2,
   selfing_reports:1, selfing_roles:1,                  // SELFingは本人が自分の申告を書ける（RLSで自分の分に制限）
   role_skill_targets:2,
-  mandala_charts:1};                                   // 個人マンダラは本人が編集できる（RLSで制限）
+  jd_items:2, jd_checks:1,                             // 職務チェックは本人が付ける（RLSで自分の分に制限）
+  mandala_charts:1};                                 // 個人マンダラは本人が編集できる（RLSで制限）
 
 /* ===== 評価シート2026新版 マスタ ===== */
 const EVAL_ROLES = {
@@ -514,7 +521,8 @@ const KPI_LIBRARY = [
 
 /* ---------------- state ---------------- */
 let data = {departments:[], employees:[], evaluations:[], kpis:[], assets:[], docTemplates:[], allowedUsers:[], skillDefs:[], empSkills:{}, announcements:[], annReads:[], licenses:[], monthlyReports:[], teamTargets:[], caseRecords:[], appUpdates:[], updReads:[],
-roleMaster:[], selfingReports:[], selfingRoles:[], roleSkillTargets:[], mandalaCharts:[]};
+roleMaster:[], selfingReports:[], selfingRoles:[], roleSkillTargets:[], mandalaCharts:[],
+jdItems:[], jdChecks:[]};
 let session = null;
 let view = 'dashboard';
 let empFilter = {q:'', status:'在籍', type:'', dept:''};
@@ -649,7 +657,7 @@ function assetToDb(a){ return {id:a.id, asset_no:a.assetNo||'', category:a.categ
 
 async function loadAll(){
   const [deps, tpls, emps, docs, evals, kpis, assets, allowed, skdefs, esk, anns, reads, lics,
-         mrep, ttg, crec, upds, urds, rmst, srep, srol, rst, mnd] = await Promise.all([
+         mrep, ttg, crec, upds, urds, rmst, srep, srol, rst, mnd, jdi, jdc] = await Promise.all([
     q(sb.from('departments').select('*').order('sort_order')),
     q(sb.from('doc_templates').select('*').order('sort_order')),
     q(sb.from('employees').select('*')),
@@ -673,7 +681,13 @@ async function loadAll(){
     q(sb.from('selfing_roles').select('*').order('sort_order')),
     q(sb.from('role_skill_targets').select('*')),
     q(sb.from('mandala_charts').select('*')),
+    q(sb.from('jd_items').select('*').order('sort_order')),
+    q(sb.from('jd_checks').select('*')),
   ]);
+  data.jdItems  = (jdi||[]).map(r=>({id:r.id, block:r.block, item:r.item, skillId:r.skill_id||'',
+    flag:r.flag||'', note:r.note||'', active:r.active!==false, sortOrder:r.sort_order||0}));
+  data.jdChecks = (jdc||[]).map(r=>({id:r.id, empId:r.employee_id, period:r.period,
+    itemId:r.item_id, mark:r.mark}));
   data.roleSkillTargets = rst||[];
   data.mandalaCharts = (mnd||[]).map(m=>({id:m.id, scope:m.scope, empId:m.employee_id,
     period:m.period, center:m.center||'', themes:m.themes||[]}));
@@ -1122,7 +1136,7 @@ function annCardHtml(){
 }
 
 /* ===== サイドバー（ピンク基調・グループ折りたたみ式） ===== */
-const APP_VER = 'ver.20260901.31';
+const APP_VER = 'ver.20260901.32';
 const NAV_GROUPS = [
   {key:'jinzai', label:'人材管理',   items:[['talent','👥','タレント'],['employees','🗂','従業員・人事情報'],['selfing','🪞','SELFing'],['skills','🧭','スキル管理'],['evals','📝','評価管理']]},
   {key:'romu',   label:'労務・書類', items:[['docs','📄','労務・書類管理'],['licenses','🏛','許可証管理'],['guide','📘','手続きガイド']]},
@@ -2476,7 +2490,7 @@ function contribOf(report){
 
 function viewSelfing(){
   if(myRank()<1) return '<div class="panel"><h2>閲覧権限がありません</h2></div>';
-  const subs = [['my','自分の申告']];
+  const subs = [['my','自分の申告'],['jd','職務チェック']];
   if(canEdit()) subs.push(['review','メンバー確認'],['balance','バランスマップ'],['compare','スキル×余力 比較']);
   else subs.push(['compare','スキル×余力 比較']);
   subs.push(['mandala','マンダラ目標']);
@@ -2495,6 +2509,7 @@ function viewSelfing(){
       <span class="muted">評点：${Object.entries(SELF_SCORE_LABEL).map(([k,v])=>`${k}=${v}`).join('　')}</span>
     </div>
     ${selfingSub==='my'? selfingMyHtml()
+     : selfingSub==='jd'? jdHtml()
      : selfingSub==='review'? selfingReviewHtml()
      : selfingSub==='balance'? selfingBalanceHtml()
      : selfingSub==='mandala'? mandalaHtml()
@@ -2840,6 +2855,371 @@ function selfingCompareHtml(){
   <p class="muted" style="margin-bottom:6px">スキル評価は高い（平均3.5以上）のに、いまの役割に入っていない分野です${cap!=null&&cap<85?'。余力もあるため、役割の追加を検討できます':''}。</p>
   <div class="tag-row">${unused.map(x=>`<span class="badge b-green">${esc(x.cat)}（スキル平均 ${x.avg.toFixed(1)}）</span>`).join('')}</div>`:''}
   `}`;
+}
+
+/* ================= ジョブディスクリプション（職務チェック） ================= */
+/* 社内の「ジョブディスクリプション.xlsx」（2023年7月版・4ブロック134項目を〇△×で自己申告）を
+   そのまま骨組みとして取り込んだもの。SELFingが「役割をどれだけ果たせているか」を大づかみに
+   見るのに対し、こちらは「具体的に何ができるか」を1項目ずつ確認する。
+   制度改正などで古くなった項目には印を付けてあるので、文面は項目マスタから直せる。 */
+const JD_BLOCKS = [
+  {key:'A', name:'営業（対企業）',       role:'紹介営業'},
+  {key:'B', name:'書類・申請',           role:'バックオフィス'},
+  {key:'C', name:'営業・支援（対人材）', role:'支援担当'},
+  {key:'D', name:'社内・チーム',         role:'共通'},
+];
+const JD_MARKS   = ['〇','△','×'];
+const JD_MARK_PT = {'〇':1, '△':0.5, '×':0};
+const JD_MARK_LABEL = {'〇':'一人でできる', '△':'助けがあればできる', '×':'まだできない'};
+const JD_FLAGS = {
+  old:{label:'制度が変わった', cls:'b-red'},
+  chk:{label:'社内で要確認',   cls:'b-yellow'},
+  new:{label:'追加案',         cls:'b-green'},
+};
+/* [ブロック, 項目, 対応スキルID, 印, 注記] — 項目の文面は2023年版のまま（印の付いたものは要調整） */
+const JD_DEFAULT_ITEMS = [
+ ['A','電話やメールでの新規問い合わせに柔軟に対応することができる。','s10'],
+ ['A','特定技能での受け入れを検討している新規企業の打ち合わせに一人で行くことができる。','s10'],
+ ['A','営業先に事前に連絡し、予定の確認を行うことができる','s10'],
+ ['A','ZOOMで新規営業ができる。','s10'],
+ ['A','求人票を作成できる。','s11'],
+ ['A','前の会社に戻りたい人リストから会社へ営業電話をかけることができる。','s10'],
+ ['A','特定技能外国人の賃金設定について企業へ正確に説明できる。','s12'],
+ ['A','特定技能外国人の住居に関して制度上、満たすべき条件を理解している。','s53'],
+ ['A','特定技能の制度の概要を充分に理解している。','s53'],
+ ['A','KMTの初期費用25万円の内訳を説明できる。','s12','chk','金額が2023年当時のもの。現行の料金に直す'],
+ ['A','KMTの委託費2~3万円の内訳を説明できる。','s12','chk','金額が2023年当時のもの。現行の料金に直す'],
+ ['A','請求書を発行し、送ることができる。','s41'],
+ ['A','未入金時を企業へ催促し、回収することができる。','s41'],
+ ['A','受入れ決定後、企業側で用意してもらう書類等をスムーズに案内できる。','s20'],
+ ['A','建設の受け入れステップを理解している。','s53'],
+ ['A','建設キャリアアップシステムが何かについて理解している。','s53'],
+ ['A','JAC・受け入れ負担金について知識と理解がある。','s53'],
+ ['A','専門工事業団体について知識と理解がある。','s53'],
+ ['A','建設受入れ後講習を受けるサポートができる。','s23'],
+ ['A','FITSの監査の対応ができる。','s23'],
+ ['A','就労管理システムで何ができるかどういった場合に利用するかを理解している。','s43'],
+ ['A','製造3分野について、特定技能外国人を受け入れられる業種かどうかの判断ができる。','s53','old','製造3分野は統合され、現在は区分の呼び方が変わっている。現行の分野名で書き直す'],
+ ['A','産業機械製造業がどういう業種を指すのかを理解している。','s53','old','上と同じ。統合後の区分で書き直す'],
+ ['A','素形材産業がどういう業種を指すのかを理解している。','s53','old','上と同じ。統合後の区分で書き直す'],
+ ['A','電気・電子情報関連産業がどういう業種を指すのかを理解している。','s53','old','上と同じ。統合後の区分で書き直す'],
+ ['A','経産省協議会加盟について手続きの流れや必要となる資料や情報について理解している。','s23','old','協議会の加入要件・時期が改正されている。現行の運用に合わせる'],
+ ['A','協議会（14業種）加盟にあたって必要書類や流れを理解している。','s23','old','分野数が14から増えている。現行の分野数に直す'],
+ ['A','各分野の協議会に問い合わせができる','s23'],
+ ['A','各国（インドネシア・ベトナム・タイ・カンボジア）の流れや必要書類を理解している。','s03','chk','現在のGLTはミャンマーも含む5チーム。対象国を合わせる'],
+ ['A','契約から受け入れまでどれくらいの時間を要するかを状況別に判断でき、説明できる。','s11'],
+ ['A','特定技能受け入れができるか否かの判断が難しい時、入管へ確認が取れる。','s23'],
+ ['A','入国・配属のスケジュールを立てることができる','s11'],
+ ['A','入国までのスケジュールを企業に共有(メールや電話で)できる','s13'],
+ ['A','空港送迎ができる。','s21'],
+ ['A','水際対策の知識がある。','s53','old','コロナの水際対策は終了済み。削除の候補'],
+ ['A','PCR検査に連れて行ける。','s21','old','コロナ対応の項目。削除の候補'],
+ ['A','配属時、企業保管の書類準備ができる。','s42'],
+ ['A','配属時、飛行機や新幹線の予約、ホテルやレンタカーの予約ができる。','s43'],
+ ['A','上記について人材分の手配もできる。','s43'],
+ ['A','配属が一人で行ける。','s21'],
+ ['A','受け入れ後、企業へ定期報告の案内ができる。','s20'],
+ ['A','3ヶ月に1回の定期報告について意味や目的を理解している。','s20'],
+ ['A','3ヶ月に1回の定期報告について提出書類を把握している。','s20'],
+ ['A','3ヶ月に1回の定期報告についてオンライン申請の存在を知っている。','s20'],
+ ['A','特定技能保険を案内できる。','s13'],
+ ['A','在留資格の更新時、必要な書類を案内できる。','s20'],
+ ['A','退職する際の入管へ必要な届出を理解している。','s20'],
+ ['A','入管へ申請ができる。','s20'],
+ ['A','入管からの電話に対応できる。','s23'],
+ ['A','企業から相談事やトラブルに臨機応変に対応できる。','s50'],
+ ['A','毎日売上金額の確認をしている','s33'],
+ ['A','常にLineの返信をすぐにしている','s13'],
+ ['A','新規事業の提案ができる','s50'],
+ ['A','自身の担当企業以外の企業の状況も積極的に把握しようと心掛けている','s52'],
+ ['A','担当企業の支援委託費の支払い時期を把握している','s41'],
+ ['A','集客の問題点を考え、新たな集客方法を提案し、実行することができる','s32'],
+ ['A','毎月かかる経費に関して把握している','s41'],
+ ['A','受入企業の担当者と積極的に交流を図っている','s13'],
+ ['A','登録支援機関・職業紹介事業の許可の更新時期と必要書類を把握している','s53','new','許可証管理の機能に合わせた追加案'],
+ ['A','特定技能2号の要件と、1号からの移行手続きを説明できる','s53','new','2023年版に無かった項目'],
+ ['A','2024年に追加された分野（自動車運送・鉄道・林業・木材産業）の受入れ可否を判断できる','s53','new','2023年版に無かった項目'],
+ ['A','育成就労制度の概要と、技能実習からの移行スケジュールを説明できる','s53','new','2023年版に無かった項目'],
+
+ ['B','営業担当から引き継ぎ書類の案内がスムーズにできる。','s42'],
+ ['B','1-6 雇用条件書作成に必要な質問票を作成することができる。','s42','chk','様式番号「1-6」が現行の様式と合っているか確認する'],
+ ['B','1-6を企業の要求と人材の要求を聞き入れ法的に問題無い範囲で、作成することができる。','s42'],
+ ['B','その他、提出必要な書類を理解し、作成ができる。','s42'],
+ ['B','企業側（法人・個人ともに）に用意してもらう書類への理解・知識がある。','s20'],
+ ['B','3点セット（労働保険・社会保険・税金）の取り寄せの案内及び代理申請ができる。','s23'],
+ ['B','人材側（国外・国内ともに）に用意してもらう書類への理解・知識がある。','s20'],
+ ['B','入管提出書類一式を把握し、不備なく申請することができる。','s20'],
+ ['B','オンライン申請ができる。','s20'],
+ ['B','協議会への申請ができる。','s23','old','協議会の加入要件が改正されている。手順を確認する'],
+ ['B','就労管理システムの申請ができる。','s43'],
+ ['B','証明写真の加工・印刷ができる。','s43'],
+ ['B','定期報告の書類作成ができる。','s20'],
+ ['B','定期報告の郵送届出ができる。','s20'],
+ ['B','定期報告のオンライン申請ができる。','s20'],
+ ['B','タイ大使館への認定の書類準備ができる。','s23'],
+ ['B','ベトナムの推薦表取得ができる。','s23'],
+ ['B','カンボジアの労働局の手続きの流れ・必要書類を理解している。','s23'],
+ ['B','入管からの追加書類提出の対応ができる。','s20'],
+ ['B','課税・納税証明書の取得が代理でできる。','s23'],
+ ['B','住民票の取得が代理でできる。','s23'],
+ ['B','年金の免除申請が代理でできる。','s23'],
+ ['B','日本年金機構へ問い合わせができ、問題を解決することができる。','s23'],
+ ['B','税務署へ問い合わせをすることができ、問題を解決することができる。','s23'],
+ ['B','労働局へ問い合わせをすることができ、問題を解決することができる。','s23'],
+ ['B','入管へ問い合わせをすることができ、問題を解決することができる。','s23'],
+ ['B','FITSの監査の書類対応ができる。','s42'],
+ ['B','個人情報・在留情報の取扱いルールを守り、社内外への共有範囲を判断できる','s53','new','2023年版に無かった項目'],
+ ['B','社内システム（人事管理・業務管理）に案件と期限を正しく登録できる','s43','new','2023年版に無かった項目'],
+
+ ['C','Facebookの使い方を十分に理解し、ページ運営ができている。','s30','chk','いま集客に使っている媒体に合わせて書き直す'],
+ ['C','Facebookの投稿が作成できる','s31','chk','いま集客に使っている媒体に合わせて書き直す'],
+ ['C','HPやfacebookの記事を作成できる','s31'],
+ ['C','新規人材からの問い合わせ対応が滞りなくできている。','s32'],
+ ['C','新規人材からの制度（特定技能の）の疑問点や相談事に対して、解決に向けてのサポートができている。','s22'],
+ ['C','特定技能制度について十分理解している。','s53'],
+ ['C','特定技能と技能実習の違いを人材にきちんと伝えられる。','s53','old','技能実習は育成就労へ移行する。説明の中身を更新する'],
+ ['C','受入れ可能な職種について理解している。','s53'],
+ ['C','受入れ可能な業種について理解している。','s53','old','2024年に分野が追加されている。対象を更新する'],
+ ['C','特定技能の申請において、人材に必要な書類が何かを理解し、案内できる。','s20'],
+ ['C','元技能実習生で前の会社に戻りたい人を見つけることができる。','s32'],
+ ['C','営業リストの更新ができる。','s33'],
+ ['C','求人を出すことができる。','s32'],
+ ['C','人材面接ができる。','s11'],
+ ['C','履歴書の作成ができる。','s42'],
+ ['C','履歴書を企業に送る事ができる。','s11'],
+ ['C','雇用条件書の内容を十分理解できている。','s53'],
+ ['C','事前ガイダンスで話す内容を理解できている。','s21'],
+ ['C','事前ガイダンス（3h）の実施ができている。','s21'],
+ ['C','入国に必要な手続きを人材へ案内できる。','s20'],
+ ['C','配属に必要な書類の準備ができる。','s42'],
+ ['C','生活オリエンテーション（8h）の実施ができている。','s21'],
+ ['C','配属が一人でできる。','s21'],
+ ['C','転職の際の必要書類の案内ができる。','s20'],
+ ['C','転出証明書の代理取得ができる。','s23'],
+ ['C','定期面談を3か月に1回実施できている。','s22'],
+ ['C','就労中の人材に対するケアが十分にできている。','s22'],
+ ['C','在留期限の確認が取れている。','s20'],
+ ['C','パスポート期限の確認が取れている。','s20'],
+ ['C','期限が近づいたら漏れなく営業担当と書類担当に共有できている。','s43'],
+ ['C','申請状況について把握できている。','s20'],
+ ['C','帰国したい人材の相談を受けた際、企業への相談等の対応が1人でできる','s22'],
+ ['C','トラブル対応が臨機応変にできている。','s50'],
+ ['C','人材を教育する立場であることを認識し、適切に指導できている。','s51'],
+ ['C','人材側だけの意見でなく、企業側の意見も取り入れ折り合いがつくように話をまとめることができる。','s03'],
+ ['C','退職者をださない努力をしている。','s22'],
+ ['C','word・Excelを用い、必要性のある資料の作成ができる。','s43'],
+ ['C','確定人材リストの確認を最低週1回行っている','s33'],
+ ['C','いま主に使っているSNS・求人媒体を使い分けて集客できる','s30','new','2023年版はFacebook前提だったため追加'],
+ ['C','母国語での相談内容を、日本語の担当者へ正確に引き継ぐことができる','s03','new','2023年版に無かった項目'],
+
+ ['D','新入社員が来る日程を事前に把握している','s40'],
+ ['D','新入社員の初日の対応ができる(企業説明、仕事内容の説明など)','s51'],
+ ['D','業務上の改善点などを考え、まとめ、提言できる','s50'],
+ ['D','自分から社内MTGの提案をすることができる','s50'],
+ ['D','自分から社内MTGの提案をし、進行役をすることができる','s52'],
+ ['D','アルバイトの人と積極的に関わり、親交を深めている','s52','chk','現在アルバイトの雇用があるか確認する'],
+ ['D','アルバイトの人の業務管理ができているか','s52','chk','現在アルバイトの雇用があるか確認する'],
+ ['D','仕事を依頼された際は、積極的に引き受けるように心掛けている','s50'],
+ ['D','自分以外の従業員の業務量を把握している','s52'],
+ ['D','業務量の多い従業員のサポートを積極的にしている','s52'],
+ ['D','在庫の管理システムを理解している','s43','chk','対象の在庫が今もあるか確認する。無ければ削除'],
+ ['D','GLT月報の数字（決定・入社・退職）を、自分の担当分について説明できる','s33','new','月報の機能に合わせた追加案'],
+ ['D','多国籍のメンバーの文化的な背景をふまえて、チーム内の調整ができる','s03','new','2023年版に無かった項目'],
+];
+
+let jdEmpId    = '';      // 表示対象（管理者は切替可能）
+let jdShowFlag = false;   // 「印の付いた項目だけ」表示
+let jdMaster   = false;   // 項目マスタの編集モード
+
+function jdItemsAll(){ return (data.jdItems||[]).slice().sort((a,b)=>a.sortOrder-b.sortOrder); }
+function jdItemsOf(block){ return jdItemsAll().filter(i=>i.active && i.block===block); }
+function jdMarkOf(empId, period, itemId){
+  const c = data.jdChecks.find(x=>x.empId===empId && x.period===period && x.itemId===itemId);
+  return c? c.mark : '';
+}
+/* 達成率は「答えた項目のうち」で出す（〇=1・△=0.5）。未回答の数は別に出して誤解を防ぐ。 */
+function jdRate(empId, period, items){
+  let pt=0, n=0;
+  items.forEach(i=>{ const m=jdMarkOf(empId, period, i.id); if(m){ pt += JD_MARK_PT[m]; n++; } });
+  return {pct: n? Math.round(pt/n*100) : null, answered:n, total:items.length};
+}
+/* 職務チェックの結果を、項目に紐づいたスキルのカテゴリごとにまとめ、スキル評価と突き合わせる */
+function jdSkillCompare(empId, period){
+  const acc = {};
+  jdItemsAll().filter(i=>i.active).forEach(i=>{
+    const s = data.skillDefs.find(x=>x.id===i.skillId); if(!s) return;
+    const m = jdMarkOf(empId, period, i.id); if(!m) return;
+    const a = acc[s.category] || (acc[s.category] = {pt:0, n:0});
+    a.pt += JD_MARK_PT[m]; a.n++;
+  });
+  return Object.entries(acc).map(([cat,v])=>{
+    const defs = data.skillDefs.filter(s=>s.category===cat);
+    const lv   = defs.map(s=>skillLevelOf(empId, s.id)).filter(x=>x>0);
+    const skillPct = lv.length? Math.round(lv.reduce((a,b)=>a+b,0)/lv.length/5*100) : null;
+    return {cat, jdPct: Math.round(v.pt/v.n*100), n:v.n, skillPct};
+  }).sort((a,b)=>b.n-a.n);
+}
+
+function jdHtml(){
+  if(!data.jdItems.length){
+    return `<div class="center" style="padding:30px">
+      <p style="margin-bottom:6px">職務チェックの項目がまだ登録されていません。</p>
+      <p class="muted" style="margin-bottom:14px">社内のジョブディスクリプション（2023年7月版・${JD_DEFAULT_ITEMS.length}項目）を取り込めます。<br>
+      制度が変わった項目には印が付くので、あとから文面を直せます。</p>
+      ${canEdit()? `<button class="btn" onclick="seedJdItems()">＋ 2023年版のジョブディスクリプションを取り込む</button>`
+                 : `<span class="muted">管理者に取り込みを依頼してください。</span>`}
+    </div>`;
+  }
+  if(jdMaster) return jdMasterHtml();
+
+  const targets = canEdit()
+    ? data.employees.filter(e=>e.status==='在籍' && !isFamilyRec(e)).sort((a,b)=>(a.empNo||'zzz').localeCompare(b.empNo||'zzz'))
+    : data.employees.filter(e=>e.id===myEmpId());
+  if(!targets.length) return '<div class="muted">対象者がいません。</div>';
+  if(!jdEmpId || !targets.some(e=>e.id===jdEmpId)) jdEmpId = (myEmpId() && targets.some(e=>e.id===myEmpId())) ? myEmpId() : targets[0].id;
+  const own = jdEmpId===myEmpId();
+  const editable = own || canEdit();
+
+  const flagged = jdItemsAll().filter(i=>i.active && i.flag).length;
+  const all = jdItemsAll().filter(i=>i.active);
+  const tot = jdRate(jdEmpId, selfingPeriod, all);
+
+  const blocks = JD_BLOCKS.map(b=>{
+    let items = jdItemsOf(b.key);
+    const r = jdRate(jdEmpId, selfingPeriod, items);
+    if(jdShowFlag) items = items.filter(i=>i.flag);
+    if(!items.length) return '';
+    return `
+    <div class="section-title" style="margin-top:16px">${esc(b.name)}
+      <span class="muted" style="font-weight:400">　達成率 ${r.pct==null?'—':r.pct+'%'}（回答 ${r.answered}/${r.total}）</span>
+    </div>
+    <div class="progress" style="margin-bottom:6px"><div style="width:${r.pct||0}%;background:${r.pct>=80?'var(--ok)':r.pct>=50?'var(--accent)':'var(--warn)'}"></div></div>
+    <div class="tablewrap"><table class="jd">
+      ${items.map(i=>{
+        const m = jdMarkOf(jdEmpId, selfingPeriod, i.id);
+        const f = JD_FLAGS[i.flag];
+        return `<tr>
+          <td>${esc(i.item)}
+            ${f? `<span class="badge ${f.cls}" title="${esc(i.note)}">${f.label}</span>`:''}
+            ${i.note? `<div class="muted small">${esc(i.note)}</div>`:''}</td>
+          <td class="center nowrap"><span class="lvseg">${JD_MARKS.map(k=>
+            `<button class="${m===k?'on':''}" ${editable?'':'disabled'} title="${JD_MARK_LABEL[k]}"
+              onclick="setJdMark('${i.id}','${k}')">${k}</button>`).join('')}</span></td>
+        </tr>`;
+      }).join('')}
+    </table></div>`;
+  }).join('');
+
+  const cmp = jdSkillCompare(jdEmpId, selfingPeriod);
+  return `
+  <div class="toolbar">
+    ${canEdit()? `<select onchange="jdEmpId=this.value;render()">
+      ${targets.map(x=>`<option value="${x.id}" ${x.id===jdEmpId?'selected':''}>${esc(x.nameKanji||x.nameRoma)}${x.empNo?`（${esc(x.empNo)}）`:''}</option>`).join('')}
+    </select>` : `<b>${esc(empById(jdEmpId).nameKanji||empById(jdEmpId).nameRoma)}</b>`}
+    <span class="badge b-blue">全体 ${tot.pct==null?'—':tot.pct+'%'}（回答 ${tot.answered}/${tot.total}）</span>
+    ${flagged? `<button class="btn small ${jdShowFlag?'':'ghost'}" onclick="jdShowFlag=!jdShowFlag;render()">⚑ 要調整 ${flagged}件</button>`:''}
+    <div class="spacer"></div>
+    <span class="muted">〇=${JD_MARK_LABEL['〇']}／△=${JD_MARK_LABEL['△']}／×=${JD_MARK_LABEL['×']}</span>
+    ${canEdit()? `<button class="btn small ghost" onclick="jdMaster=true;render()">⚙ 項目マスタ</button>`:''}
+  </div>
+  <p class="muted" style="margin-bottom:8px">出典：社内「ジョブディスクリプション」2023年7月版。制度が変わった項目・社内で確認が要る項目には印が付いています。</p>
+  ${blocks || '<div class="muted">表示する項目がありません。</div>'}
+  ${cmp.length? `
+  <div class="section-title" style="margin-top:20px">職務チェック × スキル評価</div>
+  <p class="muted" style="margin-bottom:6px">「実際にできている仕事」と「自己申告のスキル」がどれくらい合っているかを見ます。</p>
+  <div class="tablewrap"><table>
+    <tr><th>スキル分野</th><th class="center">職務チェック</th><th class="center">スキル評価</th><th>診断</th></tr>
+    ${cmp.map(x=>{
+      let d='—', cls='b-gray';
+      if(x.skillPct!=null){
+        const g = x.jdPct - x.skillPct;
+        if(g >= 15)      { d='実務は回せている（スキル評価が控えめかも）'; cls='b-blue'; }
+        else if(g <= -15){ d='スキルはあるが実務に出ていない';             cls='b-green'; }
+        else             { d='釣り合っている';                             cls='b-gray'; }
+      } else { d='スキル未評価'; cls='b-yellow'; }
+      return `<tr><td>${esc(x.cat)}</td><td class="center">${x.jdPct}%<span class="muted small">（${x.n}項目）</span></td>
+        <td class="center">${x.skillPct==null?'—':x.skillPct+'%'}</td><td><span class="badge ${cls}">${d}</span></td></tr>`;
+    }).join('')}
+  </table></div>`:''}`;
+}
+
+/* 項目マスタ（管理者のみ）。文面・対応スキル・印・使う／使わないをここで直す。 */
+function jdMasterHtml(){
+  const items = jdItemsAll();
+  return `
+  <div class="toolbar">
+    <button class="btn small ghost" onclick="jdMaster=false;render()">← チェックに戻る</button>
+    <span class="badge b-blue">${items.filter(i=>i.active).length} 項目（停止中 ${items.filter(i=>!i.active).length}）</span>
+    <div class="spacer"></div>
+    <button class="btn small" onclick="addJdItem()">＋ 項目を追加</button>
+  </div>
+  <p class="muted" style="margin-bottom:8px">文面はそのまま2023年版です。印の付いたものから直していくと早く整います。停止した項目は達成率の計算から外れます。</p>
+  <div class="tablewrap"><table>
+    <tr><th style="width:90px">ブロック</th><th>項目</th><th style="width:170px">対応スキル</th><th style="width:120px">印</th><th style="width:60px">使う</th><th style="width:40px"></th></tr>
+    ${items.map(i=>`<tr class="${i.active?'':'muted'}">
+      <td><select onchange="updJdItem('${i.id}','block',this.value)">
+        ${JD_BLOCKS.map(b=>`<option value="${b.key}" ${i.block===b.key?'selected':''}>${esc(b.name)}</option>`).join('')}
+      </select></td>
+      <td><input value="${esc(i.item)}" style="width:100%" onchange="updJdItem('${i.id}','item',this.value)">
+        <input value="${esc(i.note)}" placeholder="注記（直すときの目印）" style="width:100%;margin-top:3px"
+          onchange="updJdItem('${i.id}','note',this.value)"></td>
+      <td><select onchange="updJdItem('${i.id}','skill_id',this.value)">
+        <option value="">（なし）</option>
+        ${data.skillDefs.map(s=>`<option value="${s.id}" ${i.skillId===s.id?'selected':''}>${esc(s.category)}／${esc(s.name)}</option>`).join('')}
+      </select></td>
+      <td><select onchange="updJdItem('${i.id}','flag',this.value)">
+        <option value="" ${i.flag?'':'selected'}>—</option>
+        ${Object.entries(JD_FLAGS).map(([k,v])=>`<option value="${k}" ${i.flag===k?'selected':''}>${v.label}</option>`).join('')}
+      </select></td>
+      <td class="center"><input type="checkbox" ${i.active?'checked':''} onchange="updJdItem('${i.id}','active',this.checked)"></td>
+      <td class="center"><button class="btn small ghost" onclick="delJdItem('${i.id}')">✕</button></td>
+    </tr>`).join('')}
+  </table></div>`;
+}
+
+async function seedJdItems(){
+  if(!confirm(`社内のジョブディスクリプション（2023年7月版・${JD_DEFAULT_ITEMS.length}項目）を取り込みますか？`)) return;
+  const rows = JD_DEFAULT_ITEMS.map((t,ix)=>({block:t[0], item:t[1], skill_id:t[2]||null,
+    flag:t[3]||'', note:t[4]||'', active:true, sort_order:(ix+1)*10}));
+  const ins = await q(sb.from('jd_items').insert(rows).select());
+  if(!ins) return;
+  await loadAll(); render(); toast(`${rows.length}項目を取り込みました`);
+}
+async function setJdMark(itemId, mark){
+  const cur = data.jdChecks.find(x=>x.empId===jdEmpId && x.period===selfingPeriod && x.itemId===itemId);
+  if(cur && cur.mark===mark){                       // 同じ印をもう一度押したら取り消し
+    await q(sb.from('jd_checks').delete().eq('id', cur.id));
+    data.jdChecks = data.jdChecks.filter(x=>x.id!==cur.id);
+  } else if(cur){
+    await q(sb.from('jd_checks').update({mark, updated_at:new Date().toISOString()}).eq('id', cur.id));
+    cur.mark = mark;
+  } else {
+    const ins = await q(sb.from('jd_checks').insert({employee_id:jdEmpId, period:selfingPeriod,
+      item_id:itemId, mark}).select());
+    if(ins && ins[0]) data.jdChecks.push({id:ins[0].id, empId:jdEmpId, period:selfingPeriod, itemId, mark});
+  }
+  render();
+}
+async function addJdItem(){
+  const max = Math.max(0, ...data.jdItems.map(i=>i.sortOrder));
+  const ins = await q(sb.from('jd_items').insert({block:'D', item:'（新しい項目）', flag:'new',
+    active:true, sort_order:max+10}).select());
+  if(ins && ins[0]){ await loadAll(); render(); }
+}
+async function updJdItem(id, field, value){
+  const patch = {}; patch[field] = (field==='skill_id' && !value)? null : value;
+  await q(sb.from('jd_items').update(patch).eq('id', id));
+  const i = data.jdItems.find(x=>x.id===id); if(!i) return;
+  if(field==='skill_id') i.skillId = value; else if(field==='active') i.active = value; else i[field] = value;
+  render();
+}
+async function delJdItem(id){
+  const i = data.jdItems.find(x=>x.id===id);
+  if(!confirm(`項目「${i?i.item:''}」を削除しますか？全員のチェック記録も消えます。\n（一時的に外すだけなら「使う」のチェックを外してください）`)) return;
+  await q(sb.from('jd_items').delete().eq('id', id));
+  data.jdItems  = data.jdItems.filter(x=>x.id!==id);
+  data.jdChecks = data.jdChecks.filter(x=>x.itemId!==id);
+  render(); toast('削除しました');
 }
 
 /* ================= 社内の許可証管理 ================= */

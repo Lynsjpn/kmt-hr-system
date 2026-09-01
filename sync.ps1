@@ -1,8 +1,14 @@
 ﻿# KMT HR System - 変更をGitHubに反映するスクリプト
-# 使い方: PowerShellで  .\sync.ps1        （コミットメッセージは自動）
-#         .\sync.ps1 "評価タブを修正"     （メッセージを指定）
+# 使い方: PowerShellで  .\sync.ps1              （コミットメッセージは自動）
+#         .\sync.ps1 "評価タブを修正"           （1行のメッセージを指定）
+#         .\sync.ps1 -MessageFile msg.txt       （長い・複数行のメッセージ）
+#
+# 複数行や引用符を含むメッセージは -Message では渡さないこと。
+# PowerShell 5.1 は " を含む文字列を git に渡すときに単語で分割してしまい、
+# 「error: pathspec 'well' did not match...」のような失敗になる。
+# その場合はファイルに書いて -MessageFile を使う（git commit -F で渡される）。
 
-param([string]$Message)
+param([string]$Message, [string]$MessageFile)
 
 # 注意: $ErrorActionPreference = 'Stop' は使わない。
 # Windows PowerShell 5.1 では、git が stderr に出す「ただの警告」まで
@@ -45,11 +51,19 @@ if (-not $changes) {
     Write-Host "以下の変更をコミットします:" -ForegroundColor Cyan
     & git status --short
     $newVer = Bump-Version
-    if (-not $Message) {
-        $Message = "Update KMT HR system ($(Get-Date -Format 'yyyy-MM-dd HH:mm'))"
-    }
     if ((Invoke-Git add -A) -ne 0) { Write-Host "git add に失敗しました。" -ForegroundColor Red; exit 1 }
-    if ((Invoke-Git commit -m $Message) -ne 0) { Write-Host "コミットに失敗しました。" -ForegroundColor Red; exit 1 }
+    if ($MessageFile) {
+        if (-not (Test-Path $MessageFile)) {
+            Write-Host "メッセージファイルが見つかりません: $MessageFile" -ForegroundColor Red; exit 1
+        }
+        $rc = Invoke-Git commit -F $MessageFile
+    } else {
+        if (-not $Message) {
+            $Message = "Update KMT HR system ($(Get-Date -Format 'yyyy-MM-dd HH:mm'))"
+        }
+        $rc = Invoke-Git commit -m $Message
+    }
+    if ($rc -ne 0) { Write-Host "コミットに失敗しました。" -ForegroundColor Red; exit 1 }
 }
 
 $remote = & git remote get-url origin 2>$null
