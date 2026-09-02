@@ -305,15 +305,35 @@ create table if not exists public.jd_items (
   track      text default '共通',            -- 新規営業／企業担当／共通（共通はどちらの担当にも出る）
   item       text not null,
   skill_id   text references public.skill_defs(id) on delete set null,
+  standard   text default '',               -- 評価内容（「〇」と言える基準）
+  metric     text default '',               -- 実績として数えるもの
+  target     text default '',               -- 目安の数字
+  legal      text default '',               -- 法令の根拠（義務的支援①、職業紹介：事業報告書 など）
   flag       text default '',               -- '' | old（制度が変わった）| chk（社内で要確認）| new（追加案）
   note       text default '',
   active     boolean not null default true,
   sort_order int default 0
 );
 -- 既存のデータベースにも後から足せるようにしておく
-alter table public.jd_items add column if not exists dept    text default '';
-alter table public.jd_items add column if not exists subdesk text default '';
-alter table public.jd_items add column if not exists track   text default '共通';
+alter table public.jd_items add column if not exists dept     text default '';
+alter table public.jd_items add column if not exists subdesk  text default '';
+alter table public.jd_items add column if not exists track    text default '共通';
+alter table public.jd_items add column if not exists standard text default '';
+alter table public.jd_items add column if not exists metric   text default '';
+alter table public.jd_items add column if not exists target   text default '';
+alter table public.jd_items add column if not exists legal    text default '';
+
+-- 実績の記録（期ごとに1項目1つ）。実績指標が入っている項目にだけ入力欄が出る。
+create table if not exists public.jd_metrics (
+  id          uuid primary key default gen_random_uuid(),
+  employee_id uuid not null references public.employees(id) on delete cascade,
+  period      text not null,
+  item_id     uuid not null references public.jd_items(id) on delete cascade,
+  value       numeric,
+  note        text default '',
+  updated_at  timestamptz not null default now(),
+  unique (employee_id, period, item_id)
+);
 
 -- 誰がどの職種を担っているか。営業部は新規営業・企業担当のどちらか、または両方（兼任）
 create table if not exists public.jd_assignments (
@@ -662,6 +682,16 @@ drop policy if exists kmt_jda_write  on public.jd_assignments;
 create policy kmt_jda_select on public.jd_assignments for select to authenticated
   using (public.my_rank() >= 1);
 create policy kmt_jda_write on public.jd_assignments for all to authenticated
+  using (public.my_rank() >= 2 or employee_id = public.my_employee_id())
+  with check (public.my_rank() >= 2 or employee_id = public.my_employee_id());
+
+-- 実績の数字は、本人と管理者だけが読み書きできる
+alter table public.jd_metrics enable row level security;
+drop policy if exists kmt_jdm_select on public.jd_metrics;
+drop policy if exists kmt_jdm_write  on public.jd_metrics;
+create policy kmt_jdm_select on public.jd_metrics for select to authenticated
+  using (public.my_rank() >= 2 or employee_id = public.my_employee_id());
+create policy kmt_jdm_write on public.jd_metrics for all to authenticated
   using (public.my_rank() >= 2 or employee_id = public.my_employee_id())
   with check (public.my_rank() >= 2 or employee_id = public.my_employee_id());
 
