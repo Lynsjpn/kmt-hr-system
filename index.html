@@ -625,7 +625,7 @@ function dbToEmp(r){ return {
   birthDate:r.birth_date||'', gender:r.gender, nationality:r.nationality, isForeign:r.is_foreign,
   employmentType:r.employment_type, department:r.department, position:r.position,
   hireDate:r.hire_date||'', probationEnd:r.probation_end||'', contractEnd:r.contract_end||'', resignDate:r.resign_date||'',
-  email:r.email, phone:r.phone, address:r.address,
+  email:r.email, phone:r.phone, postalCode:r.postal_code||'', address:r.address,
   emergencyName:r.emergency_name, emergencyRelation:r.emergency_relation, emergencyPhone:r.emergency_phone,
   socialIns:r.social_ins, empInsNo:r.emp_ins_no, pensionNo:r.pension_no, myNumberCollected:r.my_number_collected,
   zairyuStatus:r.zairyu_status, zairyuCardNo:r.zairyu_card_no, zairyuExpiry:r.zairyu_expiry||'',
@@ -636,7 +636,7 @@ function empToDb(e){ return {
   birth_date:dOrNull(e.birthDate), gender:e.gender||'', nationality:e.nationality||'', is_foreign:!!e.isForeign,
   employment_type:e.employmentType, department:e.department||'', position:e.position||'',
   hire_date:dOrNull(e.hireDate), probation_end:dOrNull(e.probationEnd), contract_end:dOrNull(e.contractEnd), resign_date:dOrNull(e.resignDate),
-  email:e.email||'', phone:e.phone||'', address:e.address||'',
+  email:e.email||'', phone:e.phone||'', postal_code:e.postalCode||'', address:e.address||'',
   emergency_name:e.emergencyName||'', emergency_relation:e.emergencyRelation||'', emergency_phone:e.emergencyPhone||'',
   social_ins:!!e.socialIns, emp_ins_no:e.empInsNo||'', pension_no:e.pensionNo||'', my_number_collected:!!e.myNumberCollected,
   zairyu_status:e.zairyuStatus||'', zairyu_card_no:e.zairyuCardNo||'', zairyu_expiry:dOrNull(e.zairyuExpiry),
@@ -1136,7 +1136,7 @@ function annCardHtml(){
 }
 
 /* ===== サイドバー（ピンク基調・グループ折りたたみ式） ===== */
-const APP_VER = 'ver.20260901.32';
+const APP_VER = 'ver.20260902.33';
 const NAV_GROUPS = [
   {key:'jinzai', label:'人材管理',   items:[['talent','👥','タレント'],['employees','🗂','従業員・人事情報'],['selfing','🪞','SELFing'],['skills','🧭','スキル管理'],['evals','📝','評価管理']]},
   {key:'romu',   label:'労務・書類', items:[['docs','📄','労務・書類管理'],['licenses','🏛','許可証管理'],['guide','📘','手続きガイド']]},
@@ -3615,7 +3615,7 @@ function viewEmpDetail(id){
         <dl class="kv">
           <dt>メール</dt><dd>${esc(e.email||'—')}</dd>
           <dt>電話</dt><dd>${esc(e.phone||'—')}</dd>
-          <dt>住所 / 居住国</dt><dd>${esc(e.address||'—')}</dd>
+          <dt>住所 / 居住国</dt><dd>${e.postalCode? `〒${esc(e.postalCode)}<br>`:''}${esc(e.address||'—')}</dd>
           <dt>緊急連絡先</dt><dd>${esc(e.emergencyName||'—')} ${esc(e.emergencyRelation?`(${e.emergencyRelation})`:'')}<br>${esc(e.emergencyPhone||'')}</dd>
         </dl>
         <div class="section-title">社会保険・税</div>
@@ -3721,7 +3721,7 @@ function openEmpForm(id){
     id:uid(), empNo:'', status:'内定', nameKanji:'', nameKana:'', nameRoma:'', birthDate:'', gender:'',
     nationality:'日本', isForeign:false, employmentType:'正社員', department:data.departments[0]||'', position:'',
     hireDate:'', probationEnd:'', contractEnd:'', resignDate:'',
-    email:'', phone:'', address:'', emergencyName:'', emergencyRelation:'', emergencyPhone:'',
+    email:'', phone:'', postalCode:'', address:'', emergencyName:'', emergencyRelation:'', emergencyPhone:'',
     socialIns:true, empInsNo:'', pensionNo:'', myNumberCollected:false,
     zairyuStatus:'', zairyuCardNo:'', zairyuExpiry:'', passportNo:'', passportExpiry:'', toritsugiExpiry:'',
     notes:'', docs:{}
@@ -3750,6 +3750,7 @@ function openEmpForm(id){
   <div class="fieldset"><legend>連絡先 / Contact</legend><div class="formgrid">
     <div><label>メール</label><input id="f_email" value="${esc(e.email)}"></div>
     <div><label>電話</label><input id="f_phone" value="${esc(e.phone)}"></div>
+    <div><label>郵便番号</label><input id="f_zip" value="${esc(e.postalCode)}" placeholder="144-0051"></div>
     <div style="grid-column:1/-1"><label>住所（海外リモートは居住国・都市）</label><input id="f_addr" value="${esc(e.address)}"></div>
     <div><label>緊急連絡先 氏名</label><input id="f_emName" value="${esc(e.emergencyName)}"></div>
     <div><label>続柄</label><input id="f_emRel" value="${esc(e.emergencyRelation)}"></div>
@@ -3788,7 +3789,7 @@ async function saveEmp(id, isNew){
     birthDate:g('f_birth'), gender:g('f_gender'), nationality:g('f_nat'),
     isForeign:g('f_isForeign')==='1', department:document.getElementById('f_dept').value, position:g('f_pos'),
     hireDate:g('f_hire'), probationEnd:g('f_prob'), contractEnd:g('f_cend'), resignDate:g('f_resign'),
-    email:g('f_email'), phone:g('f_phone'), address:g('f_addr'),
+    email:g('f_email'), phone:g('f_phone'), postalCode:g('f_zip'), address:g('f_addr'),
     emergencyName:g('f_emName'), emergencyRelation:g('f_emRel'), emergencyPhone:g('f_emPhone'),
     socialIns:g('f_socIns')==='1', empInsNo:g('f_empIns'), pensionNo:g('f_pension'),
     myNumberCollected:g('f_myNum')==='1',
@@ -4665,10 +4666,10 @@ async function importJson(){
 }
 function csvCell(v){ v = String(v==null?'':v); return '"'+v.replace(/"/g,'""')+'"'; }
 function exportEmpCsv(){
-  const head = ['社員番号','ステータス','氏名','フリガナ','ローマ字','生年月日','性別','国籍','外国籍','雇用区分','部署','役職','入社日','試用期間終了','契約終了日','退職日','メール','電話','住所','緊急連絡先','緊急電話','社会保険','雇用保険番号','基礎年金番号','マイナンバー提出','在留資格','在留カード番号','在留期限','パスポート番号','パスポート期限','書類完了率','メモ'];
+  const head = ['社員番号','ステータス','氏名','フリガナ','ローマ字','生年月日','性別','国籍','外国籍','雇用区分','部署','役職','入社日','試用期間終了','契約終了日','退職日','メール','電話','郵便番号','住所','緊急連絡先','緊急電話','社会保険','雇用保険番号','基礎年金番号','マイナンバー提出','在留資格','在留カード番号','在留期限','パスポート番号','パスポート期限','書類完了率','メモ'];
   const rows = data.employees.map(e=>{
     const p = docProgress(e);
-    return [e.empNo,e.status,e.nameKanji,e.nameKana,e.nameRoma,e.birthDate,e.gender,e.nationality,e.isForeign?'はい':'いいえ',e.employmentType,e.department,e.position,e.hireDate,e.probationEnd,e.contractEnd,e.resignDate,e.email,e.phone,e.address,e.emergencyName,e.emergencyPhone,e.socialIns?'加入':'未加入',e.empInsNo,e.pensionNo,e.myNumberCollected?'済':'未',e.zairyuStatus,e.zairyuCardNo,e.zairyuExpiry,e.passportNo,e.passportExpiry,p.pct+'%',e.notes].map(csvCell).join(',');
+    return [e.empNo,e.status,e.nameKanji,e.nameKana,e.nameRoma,e.birthDate,e.gender,e.nationality,e.isForeign?'はい':'いいえ',e.employmentType,e.department,e.position,e.hireDate,e.probationEnd,e.contractEnd,e.resignDate,e.email,e.phone,e.postalCode,e.address,e.emergencyName,e.emergencyPhone,e.socialIns?'加入':'未加入',e.empInsNo,e.pensionNo,e.myNumberCollected?'済':'未',e.zairyuStatus,e.zairyuCardNo,e.zairyuExpiry,e.passportNo,e.passportExpiry,p.pct+'%',e.notes].map(csvCell).join(',');
   });
   download(`従業員一覧-${today()}.csv`, '﻿'+head.map(csvCell).join(',')+'\n'+rows.join('\n'), 'text/csv');
 }

@@ -57,6 +57,7 @@ create table if not exists public.employees (
   resign_date         date,
   email               text default '',
   phone               text default '',
+  postal_code         text default '',
   address             text default '',
   emergency_name      text default '',
   emergency_relation  text default '',
@@ -74,6 +75,8 @@ create table if not exists public.employees (
   notes               text default '',
   created_at          timestamptz not null default now()
 );
+-- 既存のデータベースにも後から足せるようにしておく（給与システムの従業員情報CSVに郵便番号がある）
+alter table public.employees add column if not exists postal_code text default '';
 
 create table if not exists public.employee_docs (
   employee_id uuid not null references public.employees(id) on delete cascade,
