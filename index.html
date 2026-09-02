@@ -7,35 +7,45 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
 :root{
-  /* ピンク基調（薄ピンク×淡ピンク） */
-  --bg:#fdf7f4; --panel:#ffffff; --border:#f0dcd3; --text:#3a2c26; --sub:#82675c;
-  --accent:#b8492e; --accent-soft:#fdeee9; --danger:#c0392b; --danger-soft:#fdecea;
-  --warn:#b7791f; --warn-soft:#fdf3e3; --ok:#1e7e4e; --ok-soft:#e6f4ec;
+  /* 白 × ターコイズ基調。メニューはパステル。（アシビズの配色に合わせている） */
+  --bg:#f4fbfc; --panel:#ffffff; --border:#dcecef; --text:#12363d; --sub:#52747d;
+  --accent:#0b7a84;        /* 文字にも使うので、白地で4.5:1を満たす濃さにしてある */
+  --accent-soft:#e4f6f8;
+  --accent-bright:#19b6c8; /* 飾り（グラデーション等）専用。文字の背景には使わない */
+  --danger:#be4058; --danger-soft:#fdebef;
+  --warn:#956712;  --warn-soft:#fdf4e4;
+  --ok:#127d5a;    --ok-soft:#e2f5ee;
   --radius:10px;
   --sb-w:250px;            /* サイドバー幅 */
-  --sb-bg:#fbe5dc;         /* サイドバー背景（ピンク薄） */
-  --sb-deep:#f9d0b8;       /* セクション見出し（ピーチ） */
-  --sb-deep2:#f5c0a2;      /* セクション見出しホバー（少し濃いピーチ） */
-  --sb-head:#fbd9c4;       /* ブランドカード（ピーチ） */
-  --sb-on-deep:#7a3520;    /* ピーチ地の上の文字色。白だと読めないため濃い茶にする */
+  --sb-bg:#ffffff;         /* サイドバー背景（白） */
+  --sb-deep:#e4f6f8;       /* 見出しの既定（淡いターコイズ） */
+  --sb-deep2:#cfeef2;      /* 見出しホバー */
+  --sb-head:#19b6c8;       /* ブランドカード（ターコイズ） */
+  --sb-on-deep:#0b5a63;    /* 淡い地の上の文字色 */
+  /* メニューのパステル。グループごとに --gc（地）と --gt（文字）を差し替える */
+  --g-pink:#fdeaf2;   --g-pink-t:#a83a68;
+  --g-lilac:#eee9fb;  --g-lilac-t:#5c46a6;
+  --g-mint:#ddf4ea;   --g-mint-t:#177a58;
+  --g-sky:#e3f1fd;    --g-sky-t:#2b6aa5;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 /* フォントは KMT業務管理システム と同じ指定に合わせている（両システムで見た目を揃えるため） */
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);font-size:14px}
 /* ===== 左サイドバー・レイアウト ===== */
 .app{display:flex;min-height:100vh}
-aside#sidebar{width:var(--sb-w);flex-shrink:0;background:var(--sb-bg);border-right:1px solid var(--border);
+aside#sidebar{width:var(--sb-w);flex-shrink:0;background:var(--sb-bg);border-right:1px solid var(--border);box-shadow:1px 0 0 rgba(11,122,132,.04);
   position:sticky;top:0;height:100vh;overflow-y:auto;padding:12px 10px 20px;scrollbar-width:thin}
 .app.nologin aside#sidebar,.app.nologin #sbToggle{display:none}
 .content{flex:1;min-width:0;display:flex;flex-direction:column}
 main{width:100%;max-width:1280px;margin:0 auto;padding:20px;flex:1}
 /* ブランドカード */
-.sb-brand{background:linear-gradient(160deg,var(--sb-head),#f5c0a2);border-radius:14px;padding:14px 12px;text-align:center;color:var(--sb-on-deep);margin-bottom:10px}
+/* ブランドカードはターコイズ→青のグラデーション。地が濃いので文字は白。 */
+.sb-brand{background:linear-gradient(150deg,#1e847c,#347ab7);border-radius:14px;padding:14px 12px;text-align:center;color:#fff;margin-bottom:10px}
 .sb-brand .logo{background:#fff;border-radius:10px;width:64px;height:64px;margin:0 auto 8px;display:flex;align-items:center;justify-content:center;
   color:var(--accent);font-weight:900;font-size:20px;letter-spacing:1px;box-shadow:0 2px 8px rgba(0,0,0,.15)}
 .sb-brand h1{font-size:15px;font-weight:800;line-height:1.4}
-.sb-brand .ver{font-size:10px;opacity:.85;text-decoration:underline;margin-top:2px;display:inline-block;color:var(--sb-on-deep)}
-.sb-brand .vercheck{font-size:9px;opacity:.7;color:var(--sb-on-deep);margin-top:2px}
+.sb-brand .ver{font-size:10px;text-decoration:underline;margin-top:2px;display:inline-block;color:#fff}
+.sb-brand .vercheck{font-size:9px;opacity:.9;color:#fff;margin-top:2px}
 /* ユーザー行 */
 .sb-user{display:flex;align-items:center;gap:6px;font-size:12px;padding:4px 6px;margin-bottom:8px}
 .sb-user .dot{width:8px;height:8px;border-radius:50%;background:#2ecc71;flex-shrink:0}
@@ -44,7 +54,7 @@ main{width:100%;max-width:1280px;margin:0 auto;padding:20px;flex:1}
 /* マイページボタン */
 .sb-mypage{display:flex;align-items:center;justify-content:center;gap:6px;background:#fff;border:1px solid var(--border);
   border-radius:999px;padding:8px;font-size:13px;font-weight:800;color:var(--accent);cursor:pointer;width:100%;margin-bottom:10px;
-  box-shadow:0 1px 4px rgba(207,89,64,.12)}
+  box-shadow:0 1px 4px rgba(11,122,132,.12)}
 .sb-mypage:hover{background:var(--accent-soft)}
 /* アラートカード */
 .sb-alert{background:#fff;border:1px solid var(--border);border-radius:10px;padding:8px 10px;margin-bottom:8px;cursor:pointer;font-size:12px}
@@ -53,16 +63,16 @@ main{width:100%;max-width:1280px;margin:0 auto;padding:20px;flex:1}
 .sb-alert .row b{flex:1;font-size:12px}
 .sb-alert .cnt{background:var(--danger);color:#fff;border-radius:999px;font-size:11px;font-weight:800;padding:1px 8px}
 .sb-alert .cnt.y{background:var(--warn)}
-.sb-alert .cnt.z{background:#ccc3bf}
+.sb-alert .cnt.z{background:#6e7879}
 .sb-alert .sub-row{display:flex;justify-content:space-between;font-size:11px;color:var(--sub);padding:1px 0 1px 14px}
 /* ===== GLT月報 ===== */
 .gp-head{background:var(--accent-soft);border-left:5px solid var(--accent);border-radius:8px;
   padding:10px 14px;font-size:16px;font-weight:800;margin-bottom:14px}
 .gmark{display:inline-block;min-width:52px;padding:2px 8px;border-radius:5px;font-size:11px;font-weight:800;text-align:center}
-.g-good{background:#1e7e4e;color:#fff}
+.g-good{background:#127d5a;color:#fff}
 .g-warn{background:#f2d024;color:#5c4a00}
-.g-bad{background:#c0392b;color:#fff}
-.g-none{background:#eee;color:#999}
+.g-bad{background:#be4058;color:#fff}
+.g-none{background:#eef2f3;color:#5c6f73}
 .gp-months{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(240px,1fr))}
 .gp-month{border:1px solid var(--border);border-radius:9px;overflow:hidden;background:#fff}
 .gp-month-head{background:var(--sb-deep);color:var(--sb-on-deep);padding:6px 10px;font-weight:800;font-size:13px}
@@ -91,7 +101,7 @@ td.goal-cur{outline:2px solid var(--accent);outline-offset:-2px}
 .md-block-center .md-theme{background:var(--accent-soft);color:var(--accent)}
 .md-done{background:var(--ok-soft)}
 .md-done::after{content:'✓';position:absolute;top:2px;right:4px;color:var(--ok);font-weight:800}
-.md-empty{background:#faf7f5}
+.md-empty{background:#f5fafb}
 .md-who{font-size:9px;color:var(--accent);font-weight:700;margin-top:2px}
 @media(max-width:860px){.md-grid{gap:4px}.md-cell{min-height:40px;font-size:9px;padding:3px}}
 /* ===== SELFing ===== */
@@ -122,8 +132,8 @@ td.goal-cur{outline:2px solid var(--accent);outline-offset:-2px}
 @media(max-width:700px){#updToast{left:12px;right:12px;max-width:none}}
 /* 画面上部の更新バナー（見落とし防止のため大きく出す） */
 .update-banner{position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:12px;
-  background:linear-gradient(100deg,#1e7e4e,#2f9e69);color:#fff;border-radius:10px;
-  padding:12px 16px;margin-bottom:14px;cursor:pointer;box-shadow:0 4px 16px rgba(30,126,78,.3);
+  background:linear-gradient(100deg,#127d5a,#2a9e77);color:#fff;border-radius:10px;
+  padding:12px 16px;margin-bottom:14px;cursor:pointer;box-shadow:0 4px 16px rgba(18,125,90,.3);
   animation:banner-in .3s ease-out}
 @keyframes banner-in{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
 .update-banner .ic{font-size:22px;flex-shrink:0}
@@ -142,24 +152,25 @@ td.goal-cur{outline:2px solid var(--accent);outline-offset:-2px}
 .sb-ann{background:#fff;border:1px solid var(--border);border-radius:10px;padding:8px 10px;margin-bottom:8px;font-size:12px}
 .sb-ann-head{display:flex;align-items:center;gap:6px;font-weight:800;margin-bottom:4px}
 .sb-ann-head .cnt{background:var(--danger);color:#fff;border-radius:999px;font-size:11px;padding:1px 8px}
-.sb-ann-head .cnt.z{background:#ccc3bf}
+.sb-ann-head .cnt.z{background:#6e7879}
 .sb-ann-head a{margin-left:auto;color:var(--accent);text-decoration:none;font-size:15px;line-height:1}
 .ann-item{display:flex;align-items:center;gap:6px;padding:4px 2px;cursor:pointer;border-radius:6px}
 .ann-item:hover{background:var(--accent-soft)}
 .ann-item .t{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--sub)}
 .ann-item.unread .t{color:var(--text);font-weight:700}
 /* メニューグループ */
-.sb-group{margin-bottom:6px}
-.sb-group>button{width:100%;display:flex;align-items:center;gap:8px;background:var(--sb-deep);border:none;color:var(--sb-on-deep);
+/* グループごとにパステル。--gc＝地の色、--gt＝その上の文字色（JS側で差し替える） */
+.sb-group{margin-bottom:6px;--gc:var(--sb-deep);--gt:var(--sb-on-deep)}
+.sb-group>button{width:100%;display:flex;align-items:center;gap:8px;background:var(--gc);border:none;color:var(--gt);
   padding:9px 12px;border-radius:9px;cursor:pointer;font-size:13px;font-weight:800}
-.sb-group>button:hover{background:var(--sb-deep2)}
+.sb-group>button:hover{filter:brightness(.96)}
 .sb-group>button .arrow{font-size:10px;width:12px}
-.sb-group>button .gcnt{margin-left:auto;background:rgba(122,53,32,.14);border-radius:999px;padding:1px 8px;font-size:11px}
-.sb-items{padding:4px 0 2px}
+.sb-group>button .gcnt{margin-left:auto;background:rgba(255,255,255,.65);border-radius:999px;padding:1px 8px;font-size:11px}
+.sb-items{padding:4px 0 2px;margin-left:6px;border-left:2px solid var(--gc)}
 .sb-item{width:100%;display:flex;align-items:center;gap:8px;background:transparent;border:none;text-align:left;
-  padding:8px 10px 8px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;color:var(--text)}
-.sb-item:hover{background:#fff}
-.sb-item.active{background:#fff;color:var(--accent);font-weight:800;box-shadow:0 1px 4px rgba(207,89,64,.15)}
+  padding:8px 10px 8px 12px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;color:var(--text)}
+.sb-item:hover{background:var(--gc)}
+.sb-item.active{background:var(--gc);color:var(--gt);font-weight:800}
 .sb-item .ic{width:18px;text-align:center}
 .sb-single{margin-bottom:6px}
 .sb-foot{margin-top:10px;text-align:center}
@@ -183,17 +194,17 @@ td.goal-cur{outline:2px solid var(--accent);outline-offset:-2px}
 .stat .num{font-size:26px;font-weight:800;color:var(--accent)}
 .stat .lbl{font-size:12px;color:var(--sub);margin-top:2px}
 table{width:100%;border-collapse:collapse;font-size:13px}
-th{background:#f8efeb;text-align:left;padding:8px;border-bottom:2px solid var(--border);white-space:nowrap;font-size:12px}
+th{background:#eef7f8;text-align:left;padding:8px;border-bottom:2px solid var(--border);white-space:nowrap;font-size:12px}
 td{padding:8px;border-bottom:1px solid var(--border);vertical-align:top}
 tr.clickable{cursor:pointer}
-tr.clickable:hover{background:#fdf3ef}
+tr.clickable:hover{background:#f2fafb}
 .tablewrap{overflow-x:auto}
 .badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap}
 .b-blue{background:var(--accent-soft);color:var(--accent)}
 .b-green{background:var(--ok-soft);color:var(--ok)}
 .b-red{background:var(--danger-soft);color:var(--danger)}
 .b-yellow{background:var(--warn-soft);color:var(--warn)}
-.b-gray{background:#f1eae7;color:var(--sub)}
+.b-gray{background:#eaf1f2;color:#4c6d75}
 button.btn{background:var(--accent);color:#fff;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600}
 button.btn:hover{filter:brightness(1.1)}
 button.btn.secondary{background:#fff;color:var(--accent);border:1px solid var(--accent)}
@@ -225,7 +236,7 @@ button.btn.ghost{background:#fff;color:var(--sub);border:1px solid var(--border)
 .doc-status{border:1px solid var(--border);border-radius:6px;padding:3px 6px;font-size:12px;background:#fff}
 .st-未依頼{color:var(--sub)} .st-依頼中{color:var(--warn)} .st-受領{color:var(--accent)} .st-確認済{color:var(--ok)} .st-対象外{color:#aaa}
 .tag-row{display:flex;gap:6px;flex-wrap:wrap}
-.progress{height:8px;background:#f1e5e0;border-radius:6px;overflow:hidden;min-width:80px}
+.progress{height:8px;background:#e2eef0;border-radius:6px;overflow:hidden;min-width:80px}
 .progress>div{height:100%;background:var(--ok)}
 .detail-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:13px}
@@ -250,12 +261,13 @@ button.btn.ghost{background:#fff;color:var(--sub);border:1px solid var(--border)
 .skmap td.namecell{text-align:left;white-space:nowrap;position:sticky;left:0;background:#fff;z-index:1}
 .skmap th.cat{background:var(--accent-soft);color:var(--accent);font-size:11px}
 .sklv{display:inline-block;width:30px;height:24px;line-height:24px;border-radius:6px;font-size:12px;font-weight:700;text-align:center}
-.lv0{background:#f4eeeb;color:#c0b3ad}
-.lv1{background:#fdeee9;color:#9e4b30}
-.lv2{background:#fad6c9;color:#8f4029}
-.lv3{background:#f2ac93;color:#6b2d16}
-.lv4{background:#c25036;color:#fff}
-.lv5{background:#a63c22;color:#fff}
+/* スキルのレベル0〜5。淡いターコイズ→濃いターコイズへ段階的に濃くする */
+.lv0{background:#eef2f3;color:#5c6f73}
+.lv1{background:#dff3f6;color:#0b5a63}
+.lv2{background:#bfe8ee;color:#08525b}
+.lv3{background:#8ed6df;color:#064a52}
+.lv4{background:#177f8a;color:#fff}
+.lv5{background:#0b7a84;color:#fff}
 .sk-input-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px}
 .sk-input-row .skname{flex:1}
 .lvseg{display:inline-flex;gap:3px}
@@ -310,7 +322,7 @@ th .en{display:block;font-weight:400}
 .avgbox span{font-size:10px;opacity:.8}
 .legend-dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
 footer{text-align:center;color:var(--sub);font-size:11px;padding:16px}
-#toast{position:fixed;bottom:18px;right:18px;background:#4a352d;color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;display:none;z-index:99;box-shadow:0 8px 24px rgba(0,0,0,.3)}
+#toast{position:fixed;bottom:18px;right:18px;background:#12363d;color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;display:none;z-index:99;box-shadow:0 8px 24px rgba(0,0,0,.3)}
 #toast.err{background:var(--danger)}
 .login-wrap{min-height:80vh;display:flex;align-items:center;justify-content:center}
 .login-card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:30px;max-width:380px;width:100%;box-shadow:0 10px 40px rgba(74,53,45,.12)}
@@ -1155,13 +1167,14 @@ function annCardHtml(){
   </div>`;
 }
 
-/* ===== サイドバー（ピンク基調・グループ折りたたみ式） ===== */
-const APP_VER = 'ver.20260902.36';
+/* ===== サイドバー（白×ターコイズ・メニューはパステル・グループ折りたたみ式） ===== */
+const APP_VER = 'ver.20260902.37';
+/* tone＝メニューのパステル色。:root の --g-*／--g-*-t と対になっている */
 const NAV_GROUPS = [
-  {key:'jinzai', label:'人材管理',   items:[['talent','👥','タレント'],['employees','🗂','従業員・人事情報'],['selfing','🪞','SELFing'],['skills','🧭','スキル管理'],['evals','📝','評価管理']]},
-  {key:'romu',   label:'労務・書類', items:[['docs','📄','労務・書類管理'],['licenses','🏛','許可証管理'],['guide','📘','手続きガイド']]},
-  {key:'keiei',  label:'経営管理',   items:[['geppo','🗓','GLT月報'],['kpi','📈','KPI管理'],['assets','💼','資産管理']]},
-  {key:'system', label:'設定',       items:[['users','👤','ユーザー管理'],['data','⚙️','データ管理']]},
+  {key:'jinzai', label:'人材管理',   tone:'pink',  items:[['talent','👥','タレント'],['employees','🗂','従業員・人事情報'],['selfing','🪞','SELFing'],['skills','🧭','スキル管理'],['evals','📝','評価管理']]},
+  {key:'romu',   label:'労務・書類', tone:'lilac', items:[['docs','📄','労務・書類管理'],['licenses','🏛','許可証管理'],['guide','📘','手続きガイド']]},
+  {key:'keiei',  label:'経営管理',   tone:'mint',  items:[['geppo','🗓','GLT月報'],['kpi','📈','KPI管理'],['assets','💼','資産管理']]},
+  {key:'system', label:'設定',       tone:'sky',   items:[['users','👤','ユーザー管理'],['data','⚙️','データ管理']]},
 ];
 let sbOpen = {jinzai:true, romu:true, keiei:true, system:false};
 function toggleGroup(k){ sbOpen[k]=!sbOpen[k]; renderNav(); }
@@ -1186,7 +1199,7 @@ function renderNav(){
     const items = g.items.filter(([k])=>navAllowed(k));
     if(!items.length) return '';
     const open = sbOpen[g.key];
-    return `<div class="sb-group">
+    return `<div class="sb-group" style="--gc:var(--g-${g.tone});--gt:var(--g-${g.tone}-t)">
       <button onclick="toggleGroup('${g.key}')">
         <span class="arrow">${open?'▼':'▶'}</span>${esc(g.label)}
         <span class="gcnt">${items.length}</span>
@@ -1283,7 +1296,7 @@ function render(){
 /* イニシャルアバター（顔写真の代わり）。名前から色を決めて安定させる */
 /* アバターの色。人を見分けるために「あえて」色相を散らしている
    （テーマ色に揃えると全員同じ色になり判別できないため） */
-const AVATAR_COLORS = ['#c2410c','#1e7e4e','#b7791f','#7c3aed','#0e7490','#a8324a','#4d7c0f','#3f4d8a'];
+const AVATAR_COLORS = ['#c2410c','#127d5a','#956712','#7c3aed','#0e7490','#a8324a','#4d7c0f','#3f4d8a'];
 function avatarOf(e, cls){
   const src = (e.nameRoma||e.nameKanji||'?').trim();
   const parts = src.split(/\s+/);
@@ -1387,17 +1400,17 @@ function radarSvg(labels, values, size, opts){
   let grid='';
   for(let g=1; g<=max; g++){
     grid += `<polygon points="${labels.map((_,i)=>pt(i,g).map(x=>x.toFixed(1)).join(',')).join(' ')}"
-      fill="none" stroke="${g===max?'#dcc9c1':'#f1e5e0'}" stroke-width="1"/>`;
+      fill="none" stroke="${g===max?'#c3dbdf':'#e2eef0'}" stroke-width="1"/>`;
   }
   const axes = labels.map((_,i)=>{ const [x,y]=pt(i,max);
-    return `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="#f1e5e0"/>`; }).join('');
+    return `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="#e2eef0"/>`; }).join('');
   const poly = labels.map((_,i)=>pt(i,values[i]).map(x=>x.toFixed(1)).join(',')).join(' ');
   /* 期待レベル（役職の目標プロフィール）を緑の破線で重ねる（アシビズの見せ方） */
   const targetPoly = o.target
     ? `<polygon points="${labels.map((_,i)=>pt(i,o.target[i]||0).map(x=>x.toFixed(1)).join(',')).join(' ')}"
-        fill="rgba(30,126,78,.06)" stroke="#1e7e4e" stroke-width="1.5" stroke-dasharray="5 4"/>` : '';
+        fill="rgba(18,125,90,.06)" stroke="#127d5a" stroke-width="1.5" stroke-dasharray="5 4"/>` : '';
   const dots = labels.map((_,i)=>{ const [x,y]=pt(i,values[i]);
-    return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.5" fill="#b8492e"/>`; }).join('');
+    return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.5" fill="#0b7a84"/>`; }).join('');
   const texts = labels.map((l,i)=>{ const a=-Math.PI/2 + i*2*Math.PI/n;
     const x=cx+(r+13)*Math.cos(a), y=cy+(r+13)*Math.sin(a);
     const anchor = Math.abs(Math.cos(a))<.3?'middle':(Math.cos(a)>0?'start':'end');
@@ -1405,7 +1418,7 @@ function radarSvg(labels, values, size, opts){
       font-size="${o.fs||10}" fill="#6b7280">${esc(l)}</text>`; }).join('');
   return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
     ${grid}${axes}${targetPoly}
-    <polygon points="${poly}" fill="rgba(207,89,64,.22)" stroke="#b8492e" stroke-width="1.5"/>
+    <polygon points="${poly}" fill="rgba(11,122,132,.22)" stroke="#0b7a84" stroke-width="1.5"/>
     ${dots}${texts}</svg>`;
 }
 function empRadar(empId, size, fs){
@@ -1552,8 +1565,8 @@ function skillMapHtml(){
     const avg = withLv.length? (withLv.reduce((a,b)=>a+b,0)/withLv.length) : 0;
     return `<td class="muted" style="font-weight:700">${fmtScore(avg)}</td>`; }).join('');
   return `<div class="tablewrap"><table class="skmap">
-    <tr><th class="namecell" style="background:#f8efeb"></th>${catRow}</tr>
-    <tr><th class="namecell" style="background:#f8efeb">氏名</th>${skillRow}</tr>
+    <tr><th class="namecell" style="background:#eef7f8"></th>${catRow}</tr>
+    <tr><th class="namecell" style="background:#eef7f8">氏名</th>${skillRow}</tr>
     ${rows}
     <tr><td class="namecell muted" style="font-weight:700">平均（評価済のみ）</td>${avgCells}</tr>
   </table></div>
@@ -2271,8 +2284,8 @@ function goalHtml(){
       <div class="section-title">現在地レーダー</div>
       <div class="radar-wrap">${radar}</div>
       <p class="muted" style="margin-top:6px">
-        <span style="color:#b8492e">━ 現在のスキル</span>／
-        <span style="color:#1e7e4e">┅ ${esc(goalRole)}の期待レベル</span></p>
+        <span style="color:#0b7a84">━ 現在のスキル</span>／
+        <span style="color:#127d5a">┅ ${esc(goalRole)}の期待レベル</span></p>
     </div>
   </div>`;
 }
@@ -2473,7 +2486,7 @@ async function saveMandalaCell(bi, ci){
    上司が貢献度を評価。会社のバランス（売上×顧客満足）を俯瞰し、
    スキル評価・余力と突き合わせる。 */
 const SELF_AXES = ['売上','顧客満足','両方','社内支援'];
-const AXIS_COLORS = {'売上':'#b8492e','顧客満足':'#1e7e4e','両方':'#7c3aed','社内支援':'#82675c'};
+const AXIS_COLORS = {'売上':'#0b7a84','顧客満足':'#127d5a','両方':'#7c3aed','社内支援':'#52747d'};
 const SELF_SCORE_LABEL = {1:'あまり果たせていない',2:'一部果たせている',3:'概ね果たせている',4:'十分果たせている',5:'期待以上に果たせている'};
 const CAPACITY_LABEL = c => c==null? '—' : c>=110? '限界を超えている' : c>=95? 'ほぼ限界' : c>=80? 'ちょうど良い' : c>=60? '少し余裕がある' : 'かなり余裕がある';
 
@@ -2764,7 +2777,7 @@ function selfingBalanceHtml(){
   const dots = pts.map(p=>{
     const cap = p.r.capacity==null? 80 : p.r.capacity;
     const rad = 8 + Math.max(0, (120-cap))/8;          // 余力があるほど大きい＝動かせる人
-    const col = cap>=100? '#c0392b' : cap>=85? '#b7791f' : '#1e7e4e';
+    const col = cap>=100? '#be4058' : cap>=85? '#956712' : '#127d5a';
     const name = (p.e.nameKanji||p.e.nameRoma).split(/\s/)[0];
     return `<g>
       <circle cx="${X(p.c.売上)}" cy="${Y(p.c.顧客満足)}" r="${rad}" fill="${col}" fill-opacity=".75">
@@ -2799,7 +2812,7 @@ function selfingBalanceHtml(){
       </div>
       <p class="muted">点線より左上＝顧客満足寄り、右下＝売上寄り。<br>
       ●の大きさ＝余力（大きいほど時間・エネルギーに余裕）。<br>
-      色：<span style="color:#1e7e4e">緑=余裕あり</span>／<span style="color:#b7791f">黄=ほぼ限界</span>／<span style="color:#c0392b">赤=限界超え</span></p>
+      色：<span style="color:#127d5a">緑=余裕あり</span>／<span style="color:#956712">黄=ほぼ限界</span>／<span style="color:#be4058">赤=限界超え</span></p>
       <div class="section-title" style="margin-top:14px">合計ポイント</div>
       <table style="max-width:280px">
         <tr><td>売上</td><td class="center"><b>${sum.売上.toFixed(1)}</b></td></tr>
@@ -3050,7 +3063,7 @@ const JD_DEFAULT_ITEMS = [
 /* 職種（トラック）。営業部は「新規営業」と「企業担当」に分かれ、片方だけの人も兼任の人もいる。
    「共通」の項目は、どちらを担っていても対象になる。 */
 const JD_TRACKS = ['新規営業','企業担当','共通'];
-const TRACK_COLORS = {'新規営業':'#b8492e', '企業担当':'#1e7e4e', '共通':'#82675c'};
+const TRACK_COLORS = {'新規営業':'#0b7a84', '企業担当':'#127d5a', '共通':'#52747d'};
 
 let jdEmpId    = '';      // 表示対象（管理者は切替可能）
 let jdDept     = '';      // 表示中の部署
@@ -4121,7 +4134,7 @@ function evalProgressHtml(list){
   const ranks = {};
   list.forEach(v=>{ const c=evalCalc(v); if(c.rank) ranks[c.rank]=(ranks[c.rank]||0)+1; });
   const maxR = Math.max(1, ...GRADES.map(g=>ranks[g]||0));
-  const RANK_COLORS = {S:'#1e7e4e', A:'#4d9e6f', B:'#b8492e', C:'#b7791f', D:'#c0392b'};
+  const RANK_COLORS = {S:'#127d5a', A:'#3f9e7f', B:'#0b7a84', C:'#956712', D:'#be4058'};
   const pending = list.filter(v=>v.status!=='確定');
   return `
   <div class="grid" style="grid-template-columns:1fr 1fr;margin-bottom:14px;align-items:start">
@@ -4141,7 +4154,7 @@ function evalProgressHtml(list){
       ${GRADES.map(g=>{ const n=ranks[g]||0; return `
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;font-size:12px">
           <b style="width:16px">${g}</b>
-          <div style="flex:1;background:#f8efeb;border-radius:5px;height:16px;overflow:hidden">
+          <div style="flex:1;background:#eef7f8;border-radius:5px;height:16px;overflow:hidden">
             <div style="width:${n*100/maxR}%;height:100%;background:${RANK_COLORS[g]}"></div>
           </div>
           <span style="width:34px;text-align:right">${n}名</span>
@@ -4926,7 +4939,7 @@ th{background:#f2f2f2;width:11em;font-weight:700}
 .sig{margin-top:28px}
 .sig .line{margin:10px 0}
 .note{font-size:8.5pt;color:#444;line-height:1.6}
-.toolbar{position:fixed;top:8px;right:8px;background:#4a352d;padding:8px 10px;border-radius:8px;font-family:sans-serif}
+.toolbar{position:fixed;top:8px;right:8px;background:#12363d;padding:8px 10px;border-radius:8px;font-family:sans-serif}
 .toolbar button{font-size:13px;padding:6px 14px;margin-left:6px;cursor:pointer}
 .disclaimer{margin-top:30px;padding:8px;border:1px dashed #999;font-size:8.5pt;color:#555;font-family:sans-serif}
 @media print{.toolbar,.disclaimer{display:none}}
