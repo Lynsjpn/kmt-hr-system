@@ -263,6 +263,15 @@ button.btn.ghost{background:#fff;color:var(--sub);border:1px solid var(--border)
 .lvseg button.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .radar-wrap{display:flex;justify-content:center}
 /* 職務チェック（ジョブディスクリプション）の一覧 */
+.jd-sub{font-size:12px;font-weight:700;color:var(--sub);background:var(--accent-soft);
+  border-left:3px solid var(--accent);padding:4px 8px;margin:10px 0 2px;border-radius:0 6px 6px 0;
+  display:flex;align-items:center;gap:8px}
+.jd-sub .small{font-weight:400}
+.jd-trackbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.jd-chip{border:1px solid var(--border);background:#fff;color:var(--sub);border-radius:999px;
+  padding:4px 14px;cursor:pointer;font-size:12px;font-weight:700}
+.jd-chip.on{background:var(--c);border-color:var(--c);color:#fff}
+.jd-chip:disabled{cursor:default;opacity:.6}
 table.jd td{font-size:13px;vertical-align:middle}
 table.jd td:last-child{width:110px;white-space:nowrap}
 table.jd .badge{margin-left:6px}
@@ -452,7 +461,7 @@ const WRITE_RANK = {allowed_users:3, departments:2, doc_templates:2, employees:2
   role_master:2,
   selfing_reports:1, selfing_roles:1,                  // SELFingは本人が自分の申告を書ける（RLSで自分の分に制限）
   role_skill_targets:2,
-  jd_items:2, jd_checks:1,                             // 職務チェックは本人が付ける（RLSで自分の分に制限）
+  jd_items:2, jd_checks:1, jd_assignments:1,           // 職務チェックと担当職種は本人が付ける（RLSで自分の分に制限）
   mandala_charts:1};                                 // 個人マンダラは本人が編集できる（RLSで制限）
 
 /* ===== 評価シート2026新版 マスタ ===== */
@@ -522,7 +531,7 @@ const KPI_LIBRARY = [
 /* ---------------- state ---------------- */
 let data = {departments:[], employees:[], evaluations:[], kpis:[], assets:[], docTemplates:[], allowedUsers:[], skillDefs:[], empSkills:{}, announcements:[], annReads:[], licenses:[], monthlyReports:[], teamTargets:[], caseRecords:[], appUpdates:[], updReads:[],
 roleMaster:[], selfingReports:[], selfingRoles:[], roleSkillTargets:[], mandalaCharts:[],
-jdItems:[], jdChecks:[]};
+jdItems:[], jdChecks:[], jdAssignments:[]};
 let session = null;
 let view = 'dashboard';
 let empFilter = {q:'', status:'在籍', type:'', dept:''};
@@ -657,7 +666,7 @@ function assetToDb(a){ return {id:a.id, asset_no:a.assetNo||'', category:a.categ
 
 async function loadAll(){
   const [deps, tpls, emps, docs, evals, kpis, assets, allowed, skdefs, esk, anns, reads, lics,
-         mrep, ttg, crec, upds, urds, rmst, srep, srol, rst, mnd, jdi, jdc] = await Promise.all([
+         mrep, ttg, crec, upds, urds, rmst, srep, srol, rst, mnd, jdi, jdc, jda] = await Promise.all([
     q(sb.from('departments').select('*').order('sort_order')),
     q(sb.from('doc_templates').select('*').order('sort_order')),
     q(sb.from('employees').select('*')),
@@ -683,11 +692,14 @@ async function loadAll(){
     q(sb.from('mandala_charts').select('*')),
     q(sb.from('jd_items').select('*').order('sort_order')),
     q(sb.from('jd_checks').select('*')),
+    q(sb.from('jd_assignments').select('*')),
   ]);
-  data.jdItems  = (jdi||[]).map(r=>({id:r.id, block:r.block, item:r.item, skillId:r.skill_id||'',
+  data.jdItems  = (jdi||[]).map(r=>({id:r.id, dept:r.dept||'', block:r.block, subdesk:r.subdesk||'',
+    track:r.track||'共通', item:r.item, skillId:r.skill_id||'',
     flag:r.flag||'', note:r.note||'', active:r.active!==false, sortOrder:r.sort_order||0}));
   data.jdChecks = (jdc||[]).map(r=>({id:r.id, empId:r.employee_id, period:r.period,
     itemId:r.item_id, mark:r.mark}));
+  data.jdAssignments = (jda||[]).map(r=>({id:r.id, empId:r.employee_id, dept:r.dept, track:r.track}));
   data.roleSkillTargets = rst||[];
   data.mandalaCharts = (mnd||[]).map(m=>({id:m.id, scope:m.scope, empId:m.employee_id,
     period:m.period, center:m.center||'', themes:m.themes||[]}));
@@ -1136,7 +1148,7 @@ function annCardHtml(){
 }
 
 /* ===== サイドバー（ピンク基調・グループ折りたたみ式） ===== */
-const APP_VER = 'ver.20260902.33';
+const APP_VER = 'ver.20260902.34';
 const NAV_GROUPS = [
   {key:'jinzai', label:'人材管理',   items:[['talent','👥','タレント'],['employees','🗂','従業員・人事情報'],['selfing','🪞','SELFing'],['skills','🧭','スキル管理'],['evals','📝','評価管理']]},
   {key:'romu',   label:'労務・書類', items:[['docs','📄','労務・書類管理'],['licenses','🏛','許可証管理'],['guide','📘','手続きガイド']]},
@@ -3027,12 +3039,44 @@ const JD_DEFAULT_ITEMS = [
  ['D','多国籍のメンバーの文化的な背景をふまえて、チーム内の調整ができる','s03','new','2023年版に無かった項目'],
 ];
 
+/* 職種（トラック）。営業部は「新規営業」と「企業担当」に分かれ、片方だけの人も兼任の人もいる。
+   「共通」の項目は、どちらを担っていても対象になる。 */
+const JD_TRACKS = ['新規営業','企業担当','共通'];
+const TRACK_COLORS = {'新規営業':'#b8492e', '企業担当':'#1e7e4e', '共通':'#82675c'};
+
 let jdEmpId    = '';      // 表示対象（管理者は切替可能）
+let jdDept     = '';      // 表示中の部署
 let jdShowFlag = false;   // 「印の付いた項目だけ」表示
 let jdMaster   = false;   // 項目マスタの編集モード
 
+/* 大分類の見出し。2023年版は A〜D のキー、2026年版は見出しそのものが入っている */
+function blockLabel(key){
+  const b = JD_BLOCKS.find(x=>x.key===key);
+  return b? b.name : key;
+}
 function jdItemsAll(){ return (data.jdItems||[]).slice().sort((a,b)=>a.sortOrder-b.sortOrder); }
-function jdItemsOf(block){ return jdItemsAll().filter(i=>i.active && i.block===block); }
+function jdDepts(){
+  const ds = [...new Set(jdItemsAll().filter(i=>i.active).map(i=>i.dept||'（未分類）'))];
+  return ds.sort((a,b)=> a==='営業部'? -1 : b==='営業部'? 1 : a.localeCompare(b));
+}
+/* その部署で使われている職種（「共通」しか無ければ職種の切り替えは出さない） */
+function jdTracksOf(dept){
+  const ts = [...new Set(jdItemsAll().filter(i=>i.active && (i.dept||'（未分類）')===dept).map(i=>i.track||'共通'))];
+  return JD_TRACKS.filter(t=>t!=='共通' && ts.includes(t));
+}
+/* 本人が担っている職種。未設定なら、その部署の職種を全部担っている扱いにする（見落としを防ぐため） */
+function jdMyTracks(empId, dept){
+  const set = (data.jdAssignments||[]).filter(a=>a.empId===empId && a.dept===dept).map(a=>a.track);
+  return set.length? set : jdTracksOf(dept);
+}
+function jdHasTrack(empId, dept, track){
+  return (data.jdAssignments||[]).some(a=>a.empId===empId && a.dept===dept && a.track===track);
+}
+/* 表示対象の項目＝その部署で、担当職種のもの＋「共通」 */
+function jdItemsFor(dept, tracks){
+  return jdItemsAll().filter(i=>i.active && (i.dept||'（未分類）')===dept
+    && ((i.track||'共通')==='共通' || tracks.includes(i.track)));
+}
 function jdMarkOf(empId, period, itemId){
   const c = data.jdChecks.find(x=>x.empId===empId && x.period===period && x.itemId===itemId);
   return c? c.mark : '';
@@ -3044,9 +3088,9 @@ function jdRate(empId, period, items){
   return {pct: n? Math.round(pt/n*100) : null, answered:n, total:items.length};
 }
 /* 職務チェックの結果を、項目に紐づいたスキルのカテゴリごとにまとめ、スキル評価と突き合わせる */
-function jdSkillCompare(empId, period){
+function jdSkillCompare(empId, period, items){
   const acc = {};
-  jdItemsAll().filter(i=>i.active).forEach(i=>{
+  (items || jdItemsAll().filter(i=>i.active)).forEach(i=>{
     const s = data.skillDefs.find(x=>x.id===i.skillId); if(!s) return;
     const m = jdMarkOf(empId, period, i.id); if(!m) return;
     const a = acc[s.category] || (acc[s.category] = {pt:0, n:0});
@@ -3080,49 +3124,100 @@ function jdHtml(){
   const own = jdEmpId===myEmpId();
   const editable = own || canEdit();
 
-  const flagged = jdItemsAll().filter(i=>i.active && i.flag).length;
-  const all = jdItemsAll().filter(i=>i.active);
-  const tot = jdRate(jdEmpId, selfingPeriod, all);
+  const depts = jdDepts();
+  if(!jdDept || !depts.includes(jdDept)) jdDept = depts[0];
+  const deptTracks = jdTracksOf(jdDept);
+  const myTracks   = jdMyTracks(jdEmpId, jdDept);
+  const noneSet    = !(data.jdAssignments||[]).some(a=>a.empId===jdEmpId && a.dept===jdDept);
 
-  const blocks = JD_BLOCKS.map(b=>{
-    let items = jdItemsOf(b.key);
-    const r = jdRate(jdEmpId, selfingPeriod, items);
-    if(jdShowFlag) items = items.filter(i=>i.flag);
-    if(!items.length) return '';
+  const shown   = jdItemsFor(jdDept, myTracks);
+  const flagged = shown.filter(i=>i.flag).length;
+  const tot     = jdRate(jdEmpId, selfingPeriod, shown);
+
+  /* 大分類 → サブデスク の順に並べる（項目マスタの並び順をそのまま使う） */
+  const byBlock = [];
+  shown.forEach(i=>{
+    const key = i.block;
+    let b = byBlock.find(x=>x.key===key);
+    if(!b){ b = {key, subs:[]}; byBlock.push(b); }
+    const sk = i.subdesk || '';
+    let s = b.subs.find(x=>x.key===sk);
+    if(!s){ s = {key:sk, items:[]}; b.subs.push(s); }
+    s.items.push(i);
+  });
+
+  const blocks = byBlock.map(b=>{
+    const bItems = b.subs.flatMap(s=>s.items);
+    const r = jdRate(jdEmpId, selfingPeriod, bItems);
+    const subs = b.subs.map(s=>{
+      const items = jdShowFlag? s.items.filter(i=>i.flag) : s.items;
+      if(!items.length) return '';
+      const sr = jdRate(jdEmpId, selfingPeriod, s.items);
+      return `
+      ${s.key? `<div class="jd-sub">${esc(s.key)}
+        <span class="muted small">${sr.pct==null?'未回答':`${sr.pct}%（${sr.answered}/${sr.total}）`}</span></div>`:''}
+      <div class="tablewrap"><table class="jd">
+        ${items.map(i=>{
+          const m = jdMarkOf(jdEmpId, selfingPeriod, i.id);
+          const f = JD_FLAGS[i.flag];
+          const tr = i.track || '共通';
+          return `<tr>
+            <td><span class="badge" style="background:${TRACK_COLORS[tr]}1a;color:${TRACK_COLORS[tr]};margin-right:6px">${esc(tr)}</span>${esc(i.item)}
+              ${f? `<span class="badge ${f.cls}" title="${esc(i.note)}">${f.label}</span>`:''}
+              ${i.note? `<div class="muted small">${esc(i.note)}</div>`:''}</td>
+            <td class="center nowrap"><span class="lvseg">${JD_MARKS.map(k=>
+              `<button class="${m===k?'on':''}" ${editable?'':'disabled'} title="${JD_MARK_LABEL[k]}"
+                onclick="setJdMark('${i.id}','${k}')">${k}</button>`).join('')}</span></td>
+          </tr>`;
+        }).join('')}
+      </table></div>`;
+    }).join('');
+    if(!subs.trim()) return '';
     return `
-    <div class="section-title" style="margin-top:16px">${esc(b.name)}
+    <div class="section-title" style="margin-top:18px">${esc(blockLabel(b.key))}
       <span class="muted" style="font-weight:400">　達成率 ${r.pct==null?'—':r.pct+'%'}（回答 ${r.answered}/${r.total}）</span>
     </div>
-    <div class="progress" style="margin-bottom:6px"><div style="width:${r.pct||0}%;background:${r.pct>=80?'var(--ok)':r.pct>=50?'var(--accent)':'var(--warn)'}"></div></div>
-    <div class="tablewrap"><table class="jd">
-      ${items.map(i=>{
-        const m = jdMarkOf(jdEmpId, selfingPeriod, i.id);
-        const f = JD_FLAGS[i.flag];
-        return `<tr>
-          <td>${esc(i.item)}
-            ${f? `<span class="badge ${f.cls}" title="${esc(i.note)}">${f.label}</span>`:''}
-            ${i.note? `<div class="muted small">${esc(i.note)}</div>`:''}</td>
-          <td class="center nowrap"><span class="lvseg">${JD_MARKS.map(k=>
-            `<button class="${m===k?'on':''}" ${editable?'':'disabled'} title="${JD_MARK_LABEL[k]}"
-              onclick="setJdMark('${i.id}','${k}')">${k}</button>`).join('')}</span></td>
-        </tr>`;
-      }).join('')}
-    </table></div>`;
+    <div class="progress" style="margin-bottom:8px"><div style="width:${r.pct||0}%;background:${r.pct>=80?'var(--ok)':r.pct>=50?'var(--accent)':'var(--warn)'}"></div></div>
+    ${subs}`;
   }).join('');
 
-  const cmp = jdSkillCompare(jdEmpId, selfingPeriod);
+  /* 職種ごとの達成率（兼任の人は、どちらの役割がどれだけ身についているかが分かる） */
+  const trackRates = deptTracks.map(t=>{
+    const its = shown.filter(i=>i.track===t);
+    return {t, r: jdRate(jdEmpId, selfingPeriod, its)};
+  }).filter(x=>x.r.total);
+  const commonRate = jdRate(jdEmpId, selfingPeriod, shown.filter(i=>(i.track||'共通')==='共通'));
+
+  const cmp = jdSkillCompare(jdEmpId, selfingPeriod, shown);
   return `
   <div class="toolbar">
     ${canEdit()? `<select onchange="jdEmpId=this.value;render()">
       ${targets.map(x=>`<option value="${x.id}" ${x.id===jdEmpId?'selected':''}>${esc(x.nameKanji||x.nameRoma)}${x.empNo?`（${esc(x.empNo)}）`:''}</option>`).join('')}
     </select>` : `<b>${esc(empById(jdEmpId).nameKanji||empById(jdEmpId).nameRoma)}</b>`}
+    ${depts.length>1? `<select onchange="jdDept=this.value;render()">
+      ${depts.map(d=>`<option ${d===jdDept?'selected':''}>${esc(d)}</option>`).join('')}
+    </select>`:''}
     <span class="badge b-blue">全体 ${tot.pct==null?'—':tot.pct+'%'}（回答 ${tot.answered}/${tot.total}）</span>
     ${flagged? `<button class="btn small ${jdShowFlag?'':'ghost'}" onclick="jdShowFlag=!jdShowFlag;render()">⚑ 要調整 ${flagged}件</button>`:''}
     <div class="spacer"></div>
     <span class="muted">〇=${JD_MARK_LABEL['〇']}／△=${JD_MARK_LABEL['△']}／×=${JD_MARK_LABEL['×']}</span>
     ${canEdit()? `<button class="btn small ghost" onclick="jdMaster=true;render()">⚙ 項目マスタ</button>`:''}
   </div>
-  <p class="muted" style="margin-bottom:8px">出典：社内「ジョブディスクリプション」2023年7月版。制度が変わった項目・社内で確認が要る項目には印が付いています。</p>
+  ${deptTracks.length? `
+  <div class="jd-trackbar">
+    <span class="muted">担当する仕事</span>
+    ${deptTracks.map(t=>`
+      <button class="jd-chip ${jdHasTrack(jdEmpId,jdDept,t)?'on':''}" ${editable?'':'disabled'}
+        style="--c:${TRACK_COLORS[t]}" onclick="toggleJdTrack('${t}')">${esc(t)}</button>`).join('')}
+    ${deptTracks.every(t=>jdHasTrack(jdEmpId,jdDept,t))
+      ? '<span class="badge b-blue">兼任</span>' : ''}
+    ${noneSet? '<span class="muted small">未設定のため、いまは全部を表示しています。担当を選ぶと、その仕事の項目だけになります。</span>'
+             : `<span class="muted small">「共通」の項目は、どちらを担っていても対象です。</span>`}
+  </div>
+  ${trackRates.length? `<div class="jd-trackbar">
+    ${trackRates.map(x=>`<span class="badge" style="background:${TRACK_COLORS[x.t]}1a;color:${TRACK_COLORS[x.t]}">${esc(x.t)} ${x.r.pct==null?'未回答':x.r.pct+'%'}<span class="small">（${x.r.answered}/${x.r.total}）</span></span>`).join('')}
+    ${commonRate.total? `<span class="badge" style="background:${TRACK_COLORS['共通']}1a;color:${TRACK_COLORS['共通']}">共通 ${commonRate.pct==null?'未回答':commonRate.pct+'%'}<span class="small">（${commonRate.answered}/${commonRate.total}）</span></span>`:''}
+  </div>`:''}`:''}
   ${blocks || '<div class="muted">表示する項目がありません。</div>'}
   ${cmp.length? `
   <div class="section-title" style="margin-top:20px">職務チェック × スキル評価</div>
@@ -3145,24 +3240,39 @@ function jdHtml(){
 
 /* 項目マスタ（管理者のみ）。文面・対応スキル・印・使う／使わないをここで直す。 */
 function jdMasterHtml(){
-  const items = jdItemsAll();
+  const depts = [...new Set(jdItemsAll().map(i=>i.dept||'（未分類）'))];
+  if(!jdDept || !depts.includes(jdDept)) jdDept = depts[0];
+  const items = jdItemsAll().filter(i=>(i.dept||'（未分類）')===jdDept);
+  const subdesks = [...new Set(jdItemsAll().filter(i=>(i.dept||'（未分類）')===jdDept && i.subdesk).map(i=>i.subdesk))];
+  const blocks   = [...new Set(jdItemsAll().filter(i=>(i.dept||'（未分類）')===jdDept).map(i=>i.block))];
   return `
   <div class="toolbar">
     <button class="btn small ghost" onclick="jdMaster=false;render()">← チェックに戻る</button>
+    <select onchange="jdDept=this.value;render()">
+      ${depts.map(d=>`<option ${d===jdDept?'selected':''}>${esc(d)}</option>`).join('')}
+    </select>
     <span class="badge b-blue">${items.filter(i=>i.active).length} 項目（停止中 ${items.filter(i=>!i.active).length}）</span>
     <div class="spacer"></div>
     <button class="btn small" onclick="addJdItem()">＋ 項目を追加</button>
   </div>
-  <p class="muted" style="margin-bottom:8px">文面はそのまま2023年版です。印の付いたものから直していくと早く整います。停止した項目は達成率の計算から外れます。</p>
+  <p class="muted" style="margin-bottom:8px">職種は「新規営業」「企業担当」「共通」から選びます。共通にした項目は、どちらの担当にも表示されます。
+  停止した項目は達成率の計算から外れます。サブデスクは自由に打てます（同じ名前でまとまります）。</p>
+  <datalist id="jd_subs">${subdesks.map(s=>`<option value="${esc(s)}">`).join('')}</datalist>
+  <datalist id="jd_blocks">${blocks.map(b=>`<option value="${esc(b)}">`).join('')}</datalist>
   <div class="tablewrap"><table>
-    <tr><th style="width:90px">ブロック</th><th>項目</th><th style="width:170px">対応スキル</th><th style="width:120px">印</th><th style="width:60px">使う</th><th style="width:40px"></th></tr>
+    <tr><th style="width:150px">大分類 / サブデスク</th><th>項目</th><th style="width:100px">職種</th>
+        <th style="width:160px">対応スキル</th><th style="width:110px">印</th><th style="width:50px">使う</th><th style="width:36px"></th></tr>
     ${items.map(i=>`<tr class="${i.active?'':'muted'}">
-      <td><select onchange="updJdItem('${i.id}','block',this.value)">
-        ${JD_BLOCKS.map(b=>`<option value="${b.key}" ${i.block===b.key?'selected':''}>${esc(b.name)}</option>`).join('')}
-      </select></td>
+      <td><input list="jd_blocks" value="${esc(i.block)}" style="width:100%" title="大分類"
+            onchange="updJdItem('${i.id}','block',this.value)">
+        <input list="jd_subs" value="${esc(i.subdesk)}" placeholder="サブデスク" style="width:100%;margin-top:3px"
+            onchange="updJdItem('${i.id}','subdesk',this.value)"></td>
       <td><input value="${esc(i.item)}" style="width:100%" onchange="updJdItem('${i.id}','item',this.value)">
         <input value="${esc(i.note)}" placeholder="注記（直すときの目印）" style="width:100%;margin-top:3px"
           onchange="updJdItem('${i.id}','note',this.value)"></td>
+      <td><select onchange="updJdItem('${i.id}','track',this.value)">
+        ${JD_TRACKS.map(t=>`<option ${(i.track||'共通')===t?'selected':''}>${esc(t)}</option>`).join('')}
+      </select></td>
       <td><select onchange="updJdItem('${i.id}','skill_id',this.value)">
         <option value="">（なし）</option>
         ${data.skillDefs.map(s=>`<option value="${s.id}" ${i.skillId===s.id?'selected':''}>${esc(s.category)}／${esc(s.name)}</option>`).join('')}
@@ -3185,6 +3295,18 @@ async function seedJdItems(){
   if(!ins) return;
   await loadAll(); render(); toast(`${rows.length}項目を取り込みました`);
 }
+/* 担当する仕事（職種）の入切。片方だけ・両方（兼任）どちらも選べる。 */
+async function toggleJdTrack(track){
+  const cur = (data.jdAssignments||[]).find(a=>a.empId===jdEmpId && a.dept===jdDept && a.track===track);
+  if(cur){
+    await q(sb.from('jd_assignments').delete().eq('id', cur.id));
+    data.jdAssignments = data.jdAssignments.filter(a=>a.id!==cur.id);
+  } else {
+    const ins = await q(sb.from('jd_assignments').insert({employee_id:jdEmpId, dept:jdDept, track}).select());
+    if(ins && ins[0]) data.jdAssignments.push({id:ins[0].id, empId:jdEmpId, dept:jdDept, track});
+  }
+  render();
+}
 async function setJdMark(itemId, mark){
   const cur = data.jdChecks.find(x=>x.empId===jdEmpId && x.period===selfingPeriod && x.itemId===itemId);
   if(cur && cur.mark===mark){                       // 同じ印をもう一度押したら取り消し
@@ -3202,8 +3324,12 @@ async function setJdMark(itemId, mark){
 }
 async function addJdItem(){
   const max = Math.max(0, ...data.jdItems.map(i=>i.sortOrder));
-  const ins = await q(sb.from('jd_items').insert({block:'D', item:'（新しい項目）', flag:'new',
-    active:true, sort_order:max+10}).select());
+  /* いま開いている部署の、いちばん下の大分類に足す（すぐ見える場所に出るように） */
+  const same = jdItemsAll().filter(i=>(i.dept||'（未分類）')===jdDept);
+  const last = same[same.length-1];
+  const ins = await q(sb.from('jd_items').insert({dept:jdDept==='（未分類）'?'':jdDept,
+    block:last? last.block : 'D', subdesk:last? last.subdesk : '', track:'共通',
+    item:'（新しい項目）', flag:'new', active:true, sort_order:max+10}).select());
   if(ins && ins[0]){ await loadAll(); render(); }
 }
 async function updJdItem(id, field, value){

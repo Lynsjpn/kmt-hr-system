@@ -299,13 +299,29 @@ create unique index if not exists mandala_personal_uidx on public.mandala_charts
 -- jd_checks＝本人が期ごとに付ける 〇／△／× の記録
 create table if not exists public.jd_items (
   id         uuid primary key default gen_random_uuid(),
-  block      text not null,                 -- A/B/C/D（JD_BLOCKS）
+  dept       text default '',               -- 営業部 ／（2023年版）など
+  block      text not null,                 -- 大分類（2023年版は A/B/C/D、2026年版は見出しそのもの）
+  subdesk    text default '',               -- サブデスク（大分類の中の小分け）
+  track      text default '共通',            -- 新規営業／企業担当／共通（共通はどちらの担当にも出る）
   item       text not null,
   skill_id   text references public.skill_defs(id) on delete set null,
   flag       text default '',               -- '' | old（制度が変わった）| chk（社内で要確認）| new（追加案）
   note       text default '',
   active     boolean not null default true,
   sort_order int default 0
+);
+-- 既存のデータベースにも後から足せるようにしておく
+alter table public.jd_items add column if not exists dept    text default '';
+alter table public.jd_items add column if not exists subdesk text default '';
+alter table public.jd_items add column if not exists track   text default '共通';
+
+-- 誰がどの職種を担っているか。営業部は新規営業・企業担当のどちらか、または両方（兼任）
+create table if not exists public.jd_assignments (
+  id          uuid primary key default gen_random_uuid(),
+  employee_id uuid not null references public.employees(id) on delete cascade,
+  dept        text not null,
+  track       text not null,
+  unique (employee_id, dept, track)
 );
 create table if not exists public.jd_checks (
   id          uuid primary key default gen_random_uuid(),
@@ -635,6 +651,17 @@ drop policy if exists kmt_jdc_write  on public.jd_checks;
 create policy kmt_jdc_select on public.jd_checks for select to authenticated
   using (public.my_rank() >= 2 or employee_id = public.my_employee_id());
 create policy kmt_jdc_write on public.jd_checks for all to authenticated
+  using (public.my_rank() >= 2 or employee_id = public.my_employee_id())
+  with check (public.my_rank() >= 2 or employee_id = public.my_employee_id());
+
+-- 担当職種は誰のものでも見えてよい（誰が何を担当しているかは社内で共有する情報）が、
+-- 書き換えは本人と管理者だけ。
+alter table public.jd_assignments enable row level security;
+drop policy if exists kmt_jda_select on public.jd_assignments;
+drop policy if exists kmt_jda_write  on public.jd_assignments;
+create policy kmt_jda_select on public.jd_assignments for select to authenticated
+  using (public.my_rank() >= 1);
+create policy kmt_jda_write on public.jd_assignments for all to authenticated
   using (public.my_rank() >= 2 or employee_id = public.my_employee_id())
   with check (public.my_rank() >= 2 or employee_id = public.my_employee_id());
 
