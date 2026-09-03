@@ -479,7 +479,8 @@ const WRITE_RANK = {allowed_users:3, departments:2, doc_templates:2, employees:2
   selfing_reports:1, selfing_roles:1,                  // SELFingは本人が自分の申告を書ける（RLSで自分の分に制限）
   role_skill_targets:2,
   jd_items:2, jd_checks:1, jd_assignments:1, jd_metrics:1,  // 職務チェック・担当職種・実績は本人が付ける（RLSで自分の分に制限）
-  mandala_charts:1};                                 // 個人マンダラは本人が編集できる（RLSで制限）
+  mandala_charts:1,
+  mental_checks:1, mental_followups:1};   // こころの健康は本人が書く（RLSで本人＋メンタル担当に限定）                                 // 個人マンダラは本人が編集できる（RLSで制限）
 
 /* ===== 評価シート2026新版 マスタ ===== */
 const EVAL_ROLES = {
@@ -763,8 +764,24 @@ async function loadAll(){
     email: a.email,
     name: a.display_name || '',
     role: ROLES.includes(a.role) ? a.role : '社員',
+    mhStaff: !!a.mh_staff,
     addedAt: (a.added_at||'').slice(0,10),
   }));
+  await loadMental();
+}
+
+/* こころの健康は別読み込みにしてある。
+   テーブル未作成やRLSで弾かれても他の機能を止めないため、q() を通さず握りつぶす。 */
+async function loadMental(){
+  data.mentalChecks = []; data.mentalFollowups = [];
+  try{
+    const [mc, mf] = await Promise.all([
+      sb.from('mental_checks').select('*').order('answered_on', {ascending:false}),
+      sb.from('mental_followups').select('*')
+    ]);
+    if(mc && !mc.error) data.mentalChecks = (mc.data||[]).map(dbToMental);
+    if(mf && !mf.error) data.mentalFollowups = mf.data||[];
+  }catch(e){ /* 未セットアップでも画面は出す */ }
 }
 
 /* ---------------- doc logic ---------------- */
@@ -965,6 +982,7 @@ const NAV = [
   ['docs','労務・書類管理',1],
   ['licenses','許可証管理',1],
   ['selfing','SELFing',1],
+  ['mental','こころの健康',1],
   ['evals','評価管理',1],
   ['skills','スキル管理',1],
   ['geppo','GLT月報',1],
@@ -1169,10 +1187,10 @@ function annCardHtml(){
 }
 
 /* ===== サイドバー（白×ターコイズ・メニューはパステル・グループ折りたたみ式） ===== */
-const APP_VER = 'ver.20260903.38';
+const APP_VER = 'ver.20260903.39';
 /* tone＝メニューのパステル色。:root の --g-*／--g-*-t と対になっている */
 const NAV_GROUPS = [
-  {key:'jinzai', label:'人材管理',   tone:'pink',  items:[['talent','👥','タレント'],['employees','🗂','従業員・人事情報'],['selfing','🪞','SELFing'],['skills','🧭','スキル管理'],['evals','📝','評価管理']]},
+  {key:'jinzai', label:'人材管理',   tone:'pink',  items:[['talent','👥','タレント'],['employees','🗂','従業員・人事情報'],['selfing','🪞','SELFing'],['mental','💚','こころの健康'],['skills','🧭','スキル管理'],['evals','📝','評価管理']]},
   {key:'romu',   label:'労務・書類', tone:'lilac', items:[['docs','📄','労務・書類管理'],['licenses','🏛','許可証管理'],['guide','📘','手続きガイド']]},
   {key:'keiei',  label:'経営管理',   tone:'mint',  items:[['geppo','🗓','GLT月報'],['kpi','📈','KPI管理'],['assets','💼','資産管理']]},
   {key:'system', label:'設定',       tone:'sky',   items:[['users','👤','ユーザー管理'],['data','⚙️','データ管理']]},
@@ -1271,6 +1289,7 @@ function render(){
   else if(view==='licenses') m.innerHTML = viewLicenses();
   else if(view==='geppo') m.innerHTML = viewGeppo();
   else if(view==='selfing') m.innerHTML = viewSelfing();
+  else if(view==='mental') m.innerHTML = viewMental();
   else if(view==='employees') m.innerHTML = currentEmpId? viewEmpDetail(currentEmpId) : viewEmployees();
   else if(view==='docs') m.innerHTML = viewDocs();
   else if(view==='evals') m.innerHTML = viewEvals();
@@ -1291,6 +1310,557 @@ function render(){
     d.id = 'updToast'; d.innerHTML = th;
     document.body.appendChild(d);
   }
+}
+
+/* ================= こころの健康セルフチェック ================= */
+/* 設計の前提（変更するときは必ず読むこと）
+   ・個人結果を見られるのは「本人」と「メンタル担当（allowed_users.mh_staff）」だけ。
+     管理者・全体管理でもフラグが無ければ Supabase の RLS が 0 行しか返さない。
+     人事権を持つ者に健康情報を見せない、という制度上の要請をシステム側でも守るため。
+   ・管理者は mental_summary() RPC の集計値のみ（5名未満は関数側で伏せる）。
+   ・匿名で答えたい人は、ログインの要らない配布用HTMLフォーム＋ファイル提出で運用する。
+     ログインして書く以上ここでの「匿名」は成立しないため、あえて用意していない。
+   ・設問は厚労省「職業性ストレス簡易調査票」57項目（A〜D）＋
+     新職業性ストレス簡易調査票80項目版からの選抜12項目（E）。
+   ・採点は単純合計法。rev:true が逆転項目（5-x で「高いほどストレス」にそろえる）。 */
+const MH_SCALE_A = ['そうだ','まあそうだ','ややちがう','ちがう'];
+const MH_SCALE_B = ['ほとんど<br>なかった','ときどき<br>あった','しばしば<br>あった','ほとんど<br>いつもあった'];
+const MH_SCALE_C = ['非常に','かなり','多少','全くない'];
+const MH_SCALE_D = ['満足','まあ満足','やや不満足','不満足'];
+const MH_QA = [
+ [1,'非常にたくさんの仕事をしなければならない',1,'量的負担'],[2,'時間内に仕事が処理しきれない',1,'量的負担'],
+ [3,'一生懸命働かなければならない',1,'量的負担'],[4,'かなり注意を集中する必要がある',1,'質的負担'],
+ [5,'高度の知識や技術が必要なむずかしい仕事だ',1,'質的負担'],[6,'勤務時間中はいつも仕事のことを考えていなければならない',1,'質的負担'],
+ [7,'からだを大変よく使う仕事だ',1,'身体的負担'],[8,'自分のペースで仕事ができる',0,'仕事のコントロール'],
+ [9,'自分で仕事の順番・やり方を決めることができる',0,'仕事のコントロール'],[10,'職場の仕事の方針に自分の意見を反映できる',0,'仕事のコントロール'],
+ [11,'自分の技能や知識を仕事で使うことが少ない',1,'技能の活用'],[12,'私の部署内で意見のくい違いがある',1,'職場の対人関係'],
+ [13,'私の部署と他の部署とはうまが合わない',1,'職場の対人関係'],[14,'私の職場の雰囲気は友好的である',0,'職場の対人関係'],
+ [15,'私の職場の作業環境（騒音、照明、温度、換気など）はよくない',1,'作業環境'],[16,'仕事の内容は自分にあっている',0,'仕事の適性'],
+ [17,'働きがいのある仕事だ',0,'働きがい']];
+const MH_QB = [
+ [18,'活気がわいてくる',1,'活気のなさ'],[19,'元気がいっぱいだ',1,'活気のなさ'],[20,'生き生きする',1,'活気のなさ'],
+ [21,'怒りを感じる',0,'イライラ感'],[22,'内心腹立たしい',0,'イライラ感'],[23,'イライラしている',0,'イライラ感'],
+ [24,'ひどく疲れた',0,'疲労感'],[25,'へとへとだ',0,'疲労感'],[26,'だるい',0,'疲労感'],
+ [27,'気がはりつめている',0,'不安感'],[28,'不安だ',0,'不安感'],[29,'落着かない',0,'不安感'],
+ [30,'ゆううつだ',0,'抑うつ感'],[31,'何をするのも面倒だ',0,'抑うつ感'],[32,'物事に集中できない',0,'抑うつ感'],
+ [33,'気分が晴れない',0,'抑うつ感'],[34,'仕事が手につかない',0,'抑うつ感'],[35,'悲しいと感じる',0,'抑うつ感'],
+ [36,'めまいがする',0,'身体愁訴'],[37,'体のふしぶしが痛む',0,'身体愁訴'],[38,'頭が重かったり頭痛がする',0,'身体愁訴'],
+ [39,'首筋や肩がこる',0,'身体愁訴'],[40,'腰が痛い',0,'身体愁訴'],[41,'目が疲れる',0,'身体愁訴'],
+ [42,'動悸や息切れがする',0,'身体愁訴'],[43,'胃腸の具合が悪い',0,'身体愁訴'],[44,'食欲がない',0,'身体愁訴'],
+ [45,'便秘や下痢をする',0,'身体愁訴'],[46,'よく眠れない',0,'身体愁訴']];
+const MH_QC = [
+ [47,'【気軽に話ができますか】上司',0,'上司の支援不足'],[48,'【気軽に話ができますか】職場の同僚',0,'同僚の支援不足'],
+ [49,'【気軽に話ができますか】配偶者、家族、友人等',0,'家族・友人の支援不足'],
+ [50,'【困った時に頼りになりますか】上司',0,'上司の支援不足'],[51,'【困った時に頼りになりますか】職場の同僚',0,'同僚の支援不足'],
+ [52,'【困った時に頼りになりますか】配偶者、家族、友人等',0,'家族・友人の支援不足'],
+ [53,'【個人的な問題を相談したらきいてくれますか】上司',0,'上司の支援不足'],[54,'【個人的な問題を相談したらきいてくれますか】職場の同僚',0,'同僚の支援不足'],
+ [55,'【個人的な問題を相談したらきいてくれますか】配偶者、家族、友人等',0,'家族・友人の支援不足']];
+const MH_QD = [[56,'仕事に満足だ',0,'満足度'],[57,'家庭生活に満足だ',0,'満足度']];
+const MH_QE = [
+ [58,'感情面で負担になる仕事だ','情緒的負担'],[60,'自分の職務や責任が何であるか分かっている','役割の明確さ'],
+ [62,'自分の仕事に見合う給料やボーナスをもらっている','報酬の納得感'],[63,'私は上司からふさわしい評価を受けている','評価の納得感'],
+ [66,'上司は誠実な態度で対応してくれる','上司の公正性'],[68,'失敗しても挽回(ばんかい)するチャンスがある職場だ','心理的安全性'],
+ [71,'一人ひとりの価値観を大事にしてくれる職場だ','多様性の尊重'],
+ [73,'職場では、（正規、非正規、アルバイトなど）いろいろな立場の人が職場の一員として尊重されている','多様性の尊重'],
+ [77,'職場で自分がいじめにあっている（セクハラ、パワハラを含む）','ハラスメント'],
+ [78,'私たちの職場では、お互いに理解し認め合っている','相互理解'],
+ [79,'仕事をしていると、活力がみなぎるように感じる','ワークエンゲイジメント'],
+ [80,'自分の仕事に誇りを感じる','ワークエンゲイジメント']];
+const MH_COPE = {
+ '問題そのものに働きかける':['上司や先輩に相談して、仕事の進め方を変える','業務の優先順位をつけ直す','できないことは早めに「できない」と伝える・調整する','手順やマニュアルを見直す／改善を提案する','わからないことはその日のうちに質問・確認する','情報を集めて対処の方法を調べる','仕事を人に頼む・分担する'],
+ '気持ちを整える':['信頼できる人に話を聞いてもらう','考え方を切り替える／完璧を求めすぎない','気持ちをノート・スマホに書き出す','専門家（産業医・カウンセラー・医療機関）に相談する','祈り・信仰の時間を持つ','「自分は悪くない」と自分に言い聞かせる'],
+ '休養（Rest）':['睡眠時間を確保する（毎日6〜7時間以上）','休憩をこまめにとる','有給休暇・連休をとる','夜勤・当番明けの過ごし方を工夫する','スマホを見ない時間をつくる'],
+ 'リラックス（Relaxation）':['深呼吸・ストレッチをする','ゆっくり入浴する','音楽を聴く','瞑想・マインドフルネスをする','ペット・植物とすごす'],
+ '気晴らし（Recreation）':['運動する（散歩・ジム・スポーツ）','趣味の時間をつくる','外出・旅行する','母国の家族や友人と連絡をとる','同郷のコミュニティ・集まりに参加する','母国の料理を作る・食べる','映画・動画・ゲームを楽しむ']};
+const MH_RISK = ['お酒の量が増えた','たばこが増えた','食べすぎ・食べなさすぎが増えた','買い物・ギャンブルが増えた','スマホ・SNSを見る時間が増えすぎた','人に会うのを避けるようになった','遅刻・欠勤が増えた','ミスや物忘れが増えた','眠れない日が増えた','いずれもあてはまらない'];
+/* 会社に求める対応：厚労省「職場環境改善のためのヒント集」6領域を、KMTで実施できる施策に置き換えたもの */
+const MH_REQ = {
+ 'A. 仕事の計画づくりへの参加と情報共有':['担当件数・担当社数の偏りを見直して平準化する','シフト・人員配置を決めるときに本人の希望を聞く場をつくる','会社の方針や変更点を早めに、わかる言葉で共有する','仕事の目的・優先順位・締切をはっきり示す','月1回、業務量を見直すミーティングを行う'],
+ 'B. 勤務時間と作業の組み立て':['残業を減らす／残業の上限を決める','休憩を確実にとれるようにする','有給休暇を取りやすくする（計画的付与・連休）','繁忙期の応援体制をつくる','夜間・休日の緊急連絡当番の負担を分散する（当番表・持ち回り）','移動時間・直行直帰の負担を軽くする','勤務間インターバルを確保する'],
+ 'C. 円滑な仕事の進め方':['マニュアル・チェックリストを整備する','システムを改善して二重入力・手作業を減らす','引継ぎ・情報共有の仕組みをつくる','一人で抱え込まない体制にする（複数担当・バックアップ）','新人・異動者への教育（OJT）の時間を確保する','期限管理（在留期限・書類期限）のアラートを仕組み化する'],
+ 'D. 働く場所の環境':['室温・照明・騒音・換気を改善する','休憩スペース・仮眠できる場所を整備する','社用車・移動の安全対策をする','礼拝スペースや食事（ハラール等）への配慮をする','PC・スマホ・机など働く道具を改善する'],
+ 'E. 職場でのお互いの支援':['上司との1対1の面談を定期的に行う','相談しやすい窓口をつくる（社外窓口・母語対応を含む）','チーム内で助け合える体制・声かけを増やす','キャリア・評価について話す面談の機会をつくる','ハラスメント相談窓口と対応ルールを明確にして周知する','困りごとを共有する場を定期的に開く'],
+ 'F. 安心できる職場のしくみ':['メンタルヘルス研修を行う（セルフケア／ラインケア）','産業医・カウンセラーに相談できる機会をつくる','休職・復職・両立支援のルールを整える','評価・昇給の基準をはっきりさせて説明する','在留資格・家族帯同など生活面の相談を支援する','日本語学習・通訳のサポートを用意する','健康診断の結果へのフォローを行う']};
+/* 労働安全衛生法66条の10第5項の「就業上の措置」。会社が講じうる措置＝対応範囲の目安 */
+const MH_MEASURE = ['労働時間を短くする（残業の免除・時短勤務）','業務内容を変える（作業の転換）','担当を替える・配置を変える','夜間・休日の対応回数を減らす','勤務地・訪問エリアを変える','休養をとる（有給・休職）ことを相談したい','産業医・医師の面接を受けたい','当面、特に必要はない'];
+const MH_WHO = ['直属の上司','人事・総務担当','社長・役員','産業医・カウンセラー','外部の相談窓口','同じ国出身の先輩・通訳'];
+const MH_STATUS = ['未対応','連絡済','面談済','対応中','完了'];
+const MH_SUB_MIN = {'量的負担':3,'質的負担':3,'身体的負担':1,'仕事のコントロール':3,'技能の活用':1,'職場の対人関係':3,'作業環境':1,'仕事の適性':1,'働きがい':1,'活気のなさ':3,'イライラ感':3,'疲労感':3,'不安感':3,'抑うつ感':6,'身体愁訴':11,'上司の支援不足':3,'同僚の支援不足':3,'家族・友人の支援不足':3};
+const MH_SUB_MAX = {'量的負担':12,'質的負担':12,'身体的負担':4,'仕事のコントロール':12,'技能の活用':4,'職場の対人関係':12,'作業環境':4,'仕事の適性':4,'働きがい':4,'活気のなさ':12,'イライラ感':12,'疲労感':12,'不安感':12,'抑うつ感':24,'身体愁訴':44,'上司の支援不足':12,'同僚の支援不足':12,'家族・友人の支援不足':12};
+const MH_ALLQ = [].concat(MH_QA, MH_QB, MH_QC, MH_QD, MH_QE.map(x=>[x[0],x[1],0,'']));
+
+let mhTab = '';        /* self / staff / summary */
+let mhMode = 'top';    /* top / form / result */
+let mhResult = null;   /* 直近に計算した結果 */
+let mhSummary = null;  /* 集計RPCの結果 */
+let mhPeriodSel = '';
+
+function isMhStaff(){ const u = myUser(); return !!(u && u.mhStaff); }
+function mhPeriod(){ const d=new Date(); const y = (d.getMonth()+1)>=4 ? d.getFullYear() : d.getFullYear()-1; return y+'年度'; }
+function mhPeriods(){
+  const s = new Set(data.mentalChecks.map(r=>r.period)); s.add(mhPeriod());
+  return Array.from(s).sort().reverse();
+}
+function dbToMental(r){ return {id:r.id, empId:r.employee_id, period:r.period, answeredOn:r.answered_on||'',
+  answers:r.answers||{}, scoreA:r.score_a, scoreB:r.score_b, scoreC:r.score_c, judge:r.judge||'',
+  coping:r.coping||[], risk:r.risk_behaviors||[], copingBest:r.coping_best||'', copingPlan:r.coping_plan||'', copingHard:r.coping_hard||'',
+  requests:r.requests||[], measures:r.measures||[], priorities:r.priorities||[],
+  freeComment:r.free_comment||'', goodPoints:r.good_points||'',
+  meetingWish:r.meeting_wish||'', meetingWho:r.meeting_who||[], meetingStyle:r.meeting_style||'',
+  meetingLang:r.meeting_lang||'', contactTime:r.contact_time||'', urgent:!!r.urgent, oncall:r.oncall||''}; }
+
+/* ---- 採点（単純合計法） ---- */
+function mhScoreItem(item, answers){
+  const v = answers['q'+item[0]];
+  if(!v) return null;
+  return item[2] ? (5-v) : v;
+}
+function mhSum(items, answers){
+  let s=0, miss=0;
+  items.forEach(it=>{ const x = mhScoreItem(it, answers); if(x===null) miss++; else s+=x; });
+  return {sum:s, miss:miss};
+}
+function mhJudge(a, b, c){
+  if(b>=77 || (b>=63 && (a+c)>=76)) return '高ストレス';
+  if(b>=63 || (a+c)>=76) return 'やや高い';
+  return '目安内';
+}
+function mhSubscales(answers){
+  const m = {};
+  [].concat(MH_QA, MH_QB, MH_QC).forEach(it=>{
+    const x = mhScoreItem(it, answers); if(x===null) return;
+    if(!m[it[3]]) m[it[3]] = 0;
+    m[it[3]] += x;
+  });
+  return m;
+}
+
+/* ---- 画面 ---- */
+function viewMental(){
+  if(!mhTab) mhTab = isMhStaff() ? 'staff' : 'self';
+  if(mhTab==='staff' && !isMhStaff()) mhTab='self';
+  if(!mhPeriodSel) mhPeriodSel = mhPeriod();
+  const tabs = [['self','🙂 自分のセルフチェック']];
+  if(isMhStaff()) tabs.push(['staff','🗂 担当者：個人結果と対応']);
+  if(isMhStaff() || myRank()>=2) tabs.push(['summary','📊 集計（個人は出ません）']);
+  const head = `
+  <style>
+    .mhq{display:grid;grid-template-columns:1fr repeat(4,74px);align-items:center;border-top:1px solid var(--border)}
+    .mhq:nth-child(odd){background:rgba(0,0,0,.015)}
+    .mhq.miss{background:var(--danger-soft)}
+    .mhq .t{padding:8px 10px;font-size:13px}
+    .mhq .t b{color:var(--sub);font-size:11px;margin-right:6px}
+    .mhq label{display:flex;align-items:center;justify-content:center;height:100%;padding:9px 0;cursor:pointer;border-left:1px solid var(--border)}
+    .mhq label:hover{background:var(--accent-soft)}
+    .mhhead{display:grid;grid-template-columns:1fr repeat(4,74px);background:#eef2f7;font-size:11px;font-weight:700;color:var(--sub)}
+    .mhhead div{padding:6px 3px;text-align:center;border-left:1px solid var(--border)}
+    .mhhead div:first-child{text-align:left;padding-left:10px;border-left:none}
+    .mhwrap{border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:6px}
+    .mhchk{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:2px 12px}
+    .mhchk label{display:flex;gap:8px;align-items:flex-start;padding:5px 8px;border-radius:7px;cursor:pointer;font-size:13px}
+    .mhchk label:hover{background:var(--accent-soft)}
+    .mhsub{font-size:12px;font-weight:800;background:#eef2f7;padding:5px 10px;border-radius:6px;margin:12px 0 6px}
+    .mhbar{display:grid;grid-template-columns:150px 1fr 46px;gap:10px;align-items:center;font-size:12px;margin-bottom:5px}
+    .mhbar .tr{height:10px;background:#e5eaf1;border-radius:6px;overflow:hidden}
+    .mhbar .fl{height:100%;background:var(--ok)}
+    .mhbar .fl.m{background:var(--warn)} .mhbar .fl.h{background:var(--danger)}
+    .mhjudge{padding:14px;border-radius:10px;font-weight:700;margin:14px 0}
+    .mhjudge.low{background:var(--ok-soft);color:var(--ok)}
+    .mhjudge.mid{background:var(--warn-soft);color:var(--warn)}
+    .mhjudge.high{background:var(--danger-soft);color:var(--danger)}
+    @media(max-width:640px){.mhq,.mhhead{grid-template-columns:1fr repeat(4,52px)}}
+  </style>
+  <div class="panel">
+    <h2>こころの健康 セルフチェック <span class="en">Mental health self-check</span></h2>
+    <div class="toolbar">
+      ${tabs.map(([k,l])=>`<button class="btn small ${mhTab===k?'':'ghost'}" onclick="mhGo('${k}')">${l}</button>`).join('')}
+      <span class="spacer"></span>
+      ${isMhStaff()?'<span class="badge b-blue">メンタル担当</span>':''}
+    </div>
+    <p class="muted">これは会社独自の任意アンケートです（法定ストレスチェックではありません）。回答は人事評価に使いません。個人の結果を見られるのは<b>本人とメンタル担当だけ</b>で、管理者・全体管理でも見られません（Supabase の RLS で制限）。</p>
+  </div>`;
+  if(mhTab==='self')    return head + mhSelfHtml();
+  if(mhTab==='staff')   return head + mhStaffHtml();
+  return head + mhSummaryHtml();
+}
+function mhGo(t){ mhTab=t; mhMode='top'; if(t==='summary') mhLoadSummary(); render(); }
+
+/* ---------- 本人ビュー ---------- */
+function mhSelfHtml(){
+  const empId = myEmpId();
+  if(!empId) return `<div class="panel"><h2>回答できません</h2>
+    <p class="muted">ログイン中のメールアドレス（${esc(myEmail())}）が、従業員マスタの「メールアドレス」欄と一致していません。人事・総務にご連絡ください。</p></div>`;
+  if(mhMode==='form')   return mhFormHtml();
+  if(mhMode==='result') return mhResultHtml(mhResult, true);
+  const mine = data.mentalChecks.filter(r=>r.empId===empId).sort((a,b)=>(b.period||'').localeCompare(a.period||''));
+  const cur  = mine.find(r=>r.period===mhPeriod());
+  return `
+  <div class="panel">
+    <h2>${esc(mhPeriod())}のセルフチェック</h2>
+    ${cur? `<div class="alert-item blue"><b>回答済み</b><span>${esc(cur.answeredOn)}に回答しています。もう一度答えると上書きされます。</span></div>`
+         : `<div class="alert-item yellow"><b>未回答</b><span>所要10〜15分です。</span></div>`}
+    <div class="toolbar" style="margin-top:12px">
+      <button class="btn" onclick="mhStart()">${cur?'もう一度答える':'セルフチェックを始める'}</button>
+      ${cur? `<button class="btn ghost" onclick="mhShowSaved('${cur.id}')">前回の結果を見る</button>`:''}
+    </div>
+    <ul class="muted" style="margin:12px 0 0 18px;line-height:1.9;font-size:13px">
+      <li>回答内容を理由に、解雇・雇止め・退職勧奨・不当な配置転換・降格・減給・昇進昇格からの除外など、不利益な取扱いは一切ありません。</li>
+      <li>判定は医学的な診断ではなく「相談したほうがよい目安」です。</li>
+      <li>名前を出したくない場合は、ログイン不要の配布用フォーム（メンタルヘルス調査2026フォルダ）で匿名提出できます。</li>
+    </ul>
+  </div>
+  ${mine.length? `<div class="panel"><h2>これまでの結果</h2><div class="tablewrap"><table>
+    <tr><th>年度</th><th>回答日</th><th>A 仕事の要因</th><th>B 心身の反応</th><th>C サポート不足</th><th>判定</th><th></th></tr>
+    ${mine.map(r=>`<tr><td>${esc(r.period)}</td><td>${esc(r.answeredOn)}</td><td>${r.scoreA}</td><td>${r.scoreB}</td><td>${r.scoreC}</td>
+      <td>${mhBadge(r.judge)}</td><td><button class="btn small ghost" onclick="mhShowSaved('${r.id}')">結果</button></td></tr>`).join('')}
+  </table></div></div>`:''}
+  ${mhContactHtml()}`;
+}
+function mhBadge(j){
+  if(j==='高ストレス') return '<span class="badge b-red">高ストレス</span>';
+  if(j==='やや高い')   return '<span class="badge b-yellow">やや高い</span>';
+  return '<span class="badge b-green">目安内</span>';
+}
+function mhStart(){ mhMode='form'; render(); window.scrollTo(0,0); }
+function mhShowSaved(id){
+  const r = data.mentalChecks.find(x=>x.id===id); if(!r) return;
+  mhResult = r; mhMode='result'; render(); window.scrollTo(0,0);
+}
+function mhCancel(){ mhMode='top'; mhResult=null; render(); window.scrollTo(0,0); }
+
+function mhQRows(items, scale, extra){
+  return `<div class="mhwrap"><div class="mhhead"><div>質問</div>${scale.map(s=>`<div>${s}</div>`).join('')}</div>
+    ${items.map(it=>`<div class="mhq" id="mhrow${it[0]}"><div class="t"><b>${it[0]}</b>${esc(it[1])}</div>
+      ${[1,2,3,4].map(v=>`<label><input type="radio" name="mhq${it[0]}" value="${v}" onchange="mhTouch(${it[0]})"></label>`).join('')}
+    </div>`).join('')}</div>${extra||''}`;
+}
+function mhChecks(groups, prefix){
+  if(Array.isArray(groups)) return `<div class="mhchk">${groups.map(g=>`<label><input type="checkbox" data-mh="${prefix}" value="${esc(g)}">${esc(g)}</label>`).join('')}</div>`;
+  return Object.keys(groups).map(k=>`<div class="mhsub">${esc(k)}</div><div class="mhchk">${
+    groups[k].map(g=>`<label><input type="checkbox" data-mh="${prefix}" value="${esc(g)}">${esc(g)}</label>`).join('')}</div>`).join('');
+}
+function mhTouch(n){ const r=document.getElementById('mhrow'+n); if(r) r.classList.remove('miss'); }
+
+function mhFormHtml(){
+  const e = empById(myEmpId()) || {};
+  return `
+  <div class="panel">
+    <h2>1. あなたの仕事について <span class="en">A. 仕事のストレス要因（17問）</span></h2>
+    <p class="muted">最近1か月のあなたの仕事について、最もあてはまるものを選んでください。</p>
+    ${mhQRows(MH_QA, MH_SCALE_A)}
+  </div>
+  <div class="panel">
+    <h2>2. 最近1か月のあなたの状態 <span class="en">B. 心身のストレス反応（29問）</span></h2>
+    ${mhQRows(MH_QB, MH_SCALE_B)}
+  </div>
+  <div class="panel">
+    <h2>3. あなたの周りの方々 <span class="en">C. 周囲のサポート（9問）</span></h2>
+    ${mhQRows(MH_QC, MH_SCALE_C)}
+  </div>
+  <div class="panel">
+    <h2>4. 満足度 <span class="en">D（2問）</span></h2>
+    ${mhQRows(MH_QD, MH_SCALE_D)}
+  </div>
+  <div class="panel">
+    <h2>5. 職場についての追加の質問 <span class="en">参考項目（12問・判定には使いません）</span></h2>
+    ${mhQRows(MH_QE.map(x=>[x[0],x[1],0,'']), MH_SCALE_A)}
+  </div>
+  <div class="panel">
+    <h2>6. あなた自身の対処法</h2>
+    <p class="muted">ストレスを感じたとき、していること・これからしようと思うことを選んでください（いくつでも）。</p>
+    ${mhChecks(MH_COPE,'cope')}
+    <div class="mhsub">最近、次のことが増えていませんか（疲れがたまっているサインです）</div>
+    ${mhChecks(MH_RISK,'risk')}
+    <div class="field" style="margin-top:14px"><label>いちばん効果があった対処法</label><textarea id="mh_best" rows="2"></textarea></div>
+    <div class="field" style="margin-top:8px"><label>この1か月、自分で取り組もうと思うこと</label><textarea id="mh_plan" rows="2"></textarea></div>
+    <div class="field" style="margin-top:8px"><label>自分だけでは難しいと感じていること</label><textarea id="mh_hard" rows="2"></textarea></div>
+  </div>
+  <div class="panel">
+    <h2>7. 会社に求める対応</h2>
+    <p class="muted">会社が実施できる範囲の項目です（厚労省「職場環境改善のためのヒント集」6領域に沿っています）。希望するものにチェックしてください。</p>
+    ${mhChecks(MH_REQ,'req')}
+    <div class="mhsub">働き方の調整（労働安全衛生法にもとづく「就業上の措置」の希望）</div>
+    <p class="muted" style="margin-bottom:6px">希望＝必ず実施ではなく、面談のうえ相談します。</p>
+    ${mhChecks(MH_MEASURE,'measure')}
+    <div class="formgrid" style="margin-top:14px">
+      <div class="field"><label>優先してほしいこと 1</label><input id="mh_top1"></div>
+      <div class="field"><label>優先してほしいこと 2</label><input id="mh_top2"></div>
+      <div class="field"><label>優先してほしいこと 3</label><input id="mh_top3"></div>
+    </div>
+    <div class="field" style="margin-top:8px"><label>会社にいちばんしてほしいこと・その理由</label><textarea id="mh_free" rows="3"></textarea></div>
+    <div class="field" style="margin-top:8px"><label>職場の良いところ・続けてほしいこと</label><textarea id="mh_good" rows="2"></textarea></div>
+  </div>
+  <div class="panel">
+    <h2>8. 面談・相談の希望</h2>
+    <div class="field"><label>面談を希望しますか</label>
+      <select id="mh_wish"><option>希望しない</option><option>今は迷っている</option><option>希望する</option></select></div>
+    <div class="field" style="margin-top:10px"><label>誰と話したいですか（複数可）</label>${mhChecks(MH_WHO,'who')}</div>
+    <div class="formgrid" style="margin-top:10px">
+      <div class="field"><label>話し方</label><select id="mh_style"><option value="">—</option><option>対面</option><option>オンライン</option><option>電話</option><option>チャット・メール</option></select></div>
+      <div class="field"><label>言語</label><select id="mh_lang"><option value="">—</option><option>日本語</option><option>やさしい日本語</option><option>英語</option><option>母語（通訳希望）</option></select></div>
+      <div class="field"><label>連絡してよい時間帯</label><input id="mh_time" placeholder="例：平日13〜16時"></div>
+      <div class="field"><label>夜間・休日の緊急連絡当番</label><select id="mh_oncall"><option value="">—</option><option>ある（月4回以上）</option><option>ある（月1〜3回）</option><option>ほとんどない</option><option>ない</option></select></div>
+    </div>
+    <label class="alert-item red" style="cursor:pointer;margin-top:14px">
+      <input type="checkbox" id="mh_urgent" style="width:18px;height:18px">
+      <b>今すぐ話したい・急いで対応してほしい</b>
+      <span>チェックすると担当者が最優先で連絡します。</span></label>
+  </div>
+  <div class="panel">
+    <h2>9. 同意して送信</h2>
+    <label class="alert-item blue" style="cursor:pointer">
+      <input type="checkbox" id="mh_consent" style="width:18px;height:18px">
+      <b>同意します</b>
+      <span>回答を、本人支援と職場改善のために利用することに同意します（人事評価には使われません）。</span></label>
+    <div class="toolbar" style="margin-top:14px">
+      <button class="btn" onclick="mhSubmit()">結果を見て保存する</button>
+      <button class="btn ghost" onclick="mhCancel()">やめる</button>
+    </div>
+    <div id="mh_msg" class="muted" style="margin-top:8px"></div>
+  </div>`;
+}
+
+function mhCollectChecks(prefix){
+  return Array.from(document.querySelectorAll('input[data-mh="'+prefix+'"]:checked')).map(x=>x.value);
+}
+function mhVal(id){ const e=document.getElementById(id); return e? e.value : ''; }
+
+async function mhSubmit(){
+  if(!document.getElementById('mh_consent').checked){ toast('「同意します」にチェックしてください', true); return; }
+  const answers = {}; const missing = [];
+  MH_ALLQ.forEach(it=>{
+    const el = document.querySelector('input[name="mhq'+it[0]+'"]:checked');
+    if(el) answers['q'+it[0]] = parseInt(el.value,10);
+    else { missing.push(it[0]); const r=document.getElementById('mhrow'+it[0]); if(r) r.classList.add('miss'); }
+  });
+  if(missing.length){
+    document.getElementById('mh_msg').innerHTML = '<span style="color:var(--danger)">未回答が'+missing.length+'問あります（'+missing.join(', ')+'）</span>';
+    if(!confirm('未回答が'+missing.length+'問あります。このまま保存しますか？\n（未回答は0点として計算され、点数は参考値になります）')){
+      const f=document.getElementById('mhrow'+missing[0]); if(f) f.scrollIntoView({block:'center'}); return;
+    }
+  }
+  const a = mhSum(MH_QA, answers).sum, b = mhSum(MH_QB, answers).sum, c = mhSum(MH_QC, answers).sum;
+  const row = {
+    employee_id: myEmpId(), period: mhPeriod(), answered_on: today(),
+    answers: answers, score_a:a, score_b:b, score_c:c, judge: mhJudge(a,b,c),
+    coping: mhCollectChecks('cope'), risk_behaviors: mhCollectChecks('risk'),
+    coping_best: mhVal('mh_best'), coping_plan: mhVal('mh_plan'), coping_hard: mhVal('mh_hard'),
+    requests: mhCollectChecks('req'), measures: mhCollectChecks('measure'),
+    priorities: [mhVal('mh_top1'), mhVal('mh_top2'), mhVal('mh_top3')].filter(x=>x),
+    free_comment: mhVal('mh_free'), good_points: mhVal('mh_good'),
+    meeting_wish: mhVal('mh_wish'), meeting_who: mhCollectChecks('who'),
+    meeting_style: mhVal('mh_style'), meeting_lang: mhVal('mh_lang'),
+    contact_time: mhVal('mh_time'), oncall: mhVal('mh_oncall'),
+    urgent: document.getElementById('mh_urgent').checked, updated_at: new Date().toISOString()
+  };
+  const saved = await q(sb.from('mental_checks').upsert(row, {onConflict:'employee_id,period'}).select());
+  const rec = (saved && saved[0]) ? dbToMental(saved[0]) : null;
+  if(rec){
+    const i = data.mentalChecks.findIndex(x=>x.empId===rec.empId && x.period===rec.period);
+    if(i>=0) data.mentalChecks[i]=rec; else data.mentalChecks.push(rec);
+    mhResult = rec;
+  }
+  mhMode='result'; render(); window.scrollTo(0,0);
+  toast('保存しました');
+}
+
+function mhResultHtml(r, isSelf){
+  if(!r) return '<div class="panel"><p class="muted">結果がありません。</p></div>';
+  const sub = mhSubscales(r.answers);
+  const order = ['量的負担','質的負担','身体的負担','仕事のコントロール','技能の活用','職場の対人関係','作業環境','仕事の適性','働きがい',
+    '活気のなさ','イライラ感','疲労感','不安感','抑うつ感','身体愁訴','上司の支援不足','同僚の支援不足','家族・友人の支援不足'];
+  const bars = order.filter(k=>sub[k]!=null).map(k=>{
+    const pct = Math.round((sub[k]-MH_SUB_MIN[k])/(MH_SUB_MAX[k]-MH_SUB_MIN[k])*100);
+    const cls = pct>=67?'h':(pct>=34?'m':'');
+    return `<div class="mhbar"><div>${k}</div><div class="tr"><div class="fl ${cls}" style="width:${pct}%"></div></div><div class="muted" style="text-align:right">${pct}%</div></div>`;
+  }).join('');
+  const jc = r.judge==='高ストレス'?'high':(r.judge==='やや高い'?'mid':'low');
+  const jt = r.judge==='高ストレス'
+    ? 'ストレスが高い状態の目安に当てはまります（基準：B≧77点、または B≧63点かつA＋C≧76点）。ひとりで抱えず、相談してください。'
+    : (r.judge==='やや高い' ? '基準には届いていませんが、負担が大きい／サポートが少ない状態です。休養と相談を早めに。'
+                            : '現在は目安の範囲内です。今の対処を続けてください。');
+  const harass = (r.answers.q77===1 || r.answers.q77===2);
+  const engage = (r.answers.q79<=2 && r.answers.q80<=2);
+  return `
+  <div class="panel">
+    <h2>セルフチェック結果 <span class="en">${esc(r.period)} ／ ${esc(r.answeredOn)}</span></h2>
+    <div class="alert-item yellow"><b>これは医学的な診断ではありません。</b><span>「相談したほうがよい目安」です。点数が低くてもつらいときは、いつでも相談してください。</span></div>
+    ${r.urgent? '<div class="alert-item red"><b>今すぐ話したい</b><span>担当者が最優先で連絡します。今つらい場合は下の相談窓口に電話してください。</span></div>':''}
+    <div class="grid cols3" style="margin-top:12px">
+      <div class="stat"><div class="num">${r.scoreA}</div><div class="lbl">A 仕事のストレス要因（17〜68）</div></div>
+      <div class="stat"><div class="num">${r.scoreB}</div><div class="lbl">B 心身のストレス反応（29〜116）</div></div>
+      <div class="stat"><div class="num">${r.scoreC}</div><div class="lbl">C 周囲のサポート不足（9〜36）</div></div>
+    </div>
+    <div class="mhjudge ${jc}">判定：${esc(r.judge)}<br><span style="font-weight:400;font-size:13px">${jt}</span></div>
+    <div class="section-title">項目別の傾向（棒が長いほど負担が大きい／サポートが少ない）</div>
+    ${bars}
+    ${harass? '<div class="alert-item red" style="margin-top:12px"><b>ハラスメント</b><span>「職場で自分がいじめにあっている」に該当があります。相談窓口へご連絡ください。相談による不利益はありません。</span></div>':''}
+    ${engage? '<div class="alert-item blue" style="margin-top:12px"><b>ワークエンゲイジメント</b><span>仕事に活力と誇りを感じられている状態です。その源になっている働き方は続けてください。</span></div>':''}
+    ${r.coping.length? `<div class="section-title">あなたが選んだ「自分の対処法」</div><div class="tag-row">${r.coping.map(x=>`<span class="badge b-green">${esc(x)}</span>`).join('')}</div>`:''}
+    ${(r.risk.length && r.risk[0]!=='いずれもあてはまらない')? `<div class="alert-item yellow" style="margin-top:10px"><b>気になるサイン</b><span>${esc(r.risk.join('／'))}</span></div>`:''}
+    ${(r.requests.length||r.measures.length)? `<div class="section-title">あなたが選んだ「会社に求める対応」</div><div class="tag-row">${
+      r.requests.map(x=>`<span class="badge b-blue">${esc(x)}</span>`).join('')}${
+      r.measures.map(x=>`<span class="badge b-yellow">${esc(x)}</span>`).join('')}</div>`:''}
+    ${isSelf? `<div class="toolbar" style="margin-top:16px"><button class="btn ghost" onclick="mhCancel()">戻る</button>
+      <button class="btn ghost" onclick="window.print()">印刷／PDF</button></div>`:''}
+  </div>
+  ${mhContactHtml()}`;
+}
+function mhContactHtml(){
+  return `<div class="panel">
+    <h2>相談できるところ <span class="en">Where to get help</span></h2>
+    <div class="grid cols3">
+      <div class="stat" style="text-align:left"><b>社内窓口</b><div class="muted">人事・総務担当／ハラスメント相談窓口</div></div>
+      <div class="stat" style="text-align:left"><b>こころの耳 電話相談</b><div class="muted">0120-565-455（無料）<br>平日17:00〜22:00／土日10:00〜16:00</div></div>
+      <div class="stat" style="text-align:left"><b>よりそいホットライン（多言語）</b><div class="muted">0120-279-338（無料）<br>ガイダンス後に「2」／10:00〜22:00<br>英語・ベトナム語・タイ語・タガログ語・ネパール語ほか</div></div>
+    </div>
+  </div>`;
+}
+
+/* ---------- 担当者ビュー ---------- */
+function mhFollow(id){ return data.mentalFollowups.find(f=>f.check_id===id) || {check_id:id, status:'未対応', staff_note:'', handled_by:''}; }
+function mhStaffHtml(){
+  const rows = data.mentalChecks.filter(r=>r.period===mhPeriodSel)
+    .sort((a,b)=>(b.urgent?1:0)-(a.urgent?1:0) || (b.scoreB||0)-(a.scoreB||0));
+  const n = rows.length;
+  const high = rows.filter(r=>r.judge==='高ストレス').length;
+  const urg  = rows.filter(r=>r.urgent).length;
+  const wish = rows.filter(r=>r.meetingWish && r.meetingWish!=='希望しない').length;
+  const notYet = data.employees.filter(e=>e.status==='在籍' && !rows.some(r=>r.empId===e.id));
+  const cnt = {};
+  rows.forEach(r=>r.requests.concat(r.measures).forEach(x=>{ cnt[x]=(cnt[x]||0)+1; }));
+  const rank = Object.keys(cnt).map(k=>[k,cnt[k]]).sort((a,b)=>b[1]-a[1]).slice(0,15);
+  return `
+  <div class="panel">
+    <div class="toolbar">
+      <label class="muted">年度</label>
+      <select onchange="mhPeriodSel=this.value;render()">${mhPeriods().map(p=>`<option ${p===mhPeriodSel?'selected':''}>${esc(p)}</option>`).join('')}</select>
+      <span class="spacer"></span>
+      <button class="btn small secondary" onclick="mhExportCsv()">CSVで書き出し</button>
+    </div>
+    <div class="grid cols4">
+      <div class="stat"><div class="num">${n}</div><div class="lbl">回答数</div></div>
+      <div class="stat"><div class="num">${high}</div><div class="lbl">高ストレス</div></div>
+      <div class="stat"><div class="num">${urg}</div><div class="lbl">今すぐ話したい</div></div>
+      <div class="stat"><div class="num">${wish}</div><div class="lbl">面談希望</div></div>
+    </div>
+    <p class="muted" style="margin-top:10px">個人結果は本人とメンタル担当だけが見られます。役員・所属長には「集計」タブの数字のみを報告してください。回答を理由とする不利益取扱いは禁止です。</p>
+  </div>
+  <div class="panel">
+    <h2>個人結果と対応状況</h2>
+    <div class="tablewrap"><table>
+      <tr><th>氏名</th><th>所属</th><th>A</th><th>B</th><th>C</th><th>判定</th><th>面談</th><th>急ぎ</th><th>対応状況</th><th>メモ</th><th></th></tr>
+      ${rows.map(r=>{
+        const e = empById(r.empId) || {};
+        const f = mhFollow(r.id);
+        return `<tr>
+          <td><b>${esc(e.nameKanji||e.nameRoma||'—')}</b></td>
+          <td class="muted">${esc(e.department||'')}</td>
+          <td>${r.scoreA}</td><td>${r.scoreB}</td><td>${r.scoreC}</td>
+          <td>${mhBadge(r.judge)}</td>
+          <td class="muted">${esc(r.meetingWish||'')}</td>
+          <td>${r.urgent?'<span class="badge b-red">★</span>':''}</td>
+          <td><select onchange="mhSetStatus('${r.id}', this.value)">${MH_STATUS.map(s=>`<option ${f.status===s?'selected':''}>${s}</option>`).join('')}</select></td>
+          <td><input value="${esc(f.staff_note||'')}" onchange="mhSetNote('${r.id}', this.value)" placeholder="対応メモ" style="min-width:160px"></td>
+          <td><button class="btn small ghost" onclick="mhShowSaved('${r.id}');mhTab='staff'">詳細</button></td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="11" class="muted">この年度の回答はまだありません。</td></tr>'}
+    </table></div>
+  </div>
+  <div class="panel">
+    <h2>要望の多い項目 トップ15</h2>
+    <div class="tablewrap"><table><tr><th>順位</th><th>項目</th><th>件数</th><th>割合</th></tr>
+      ${rank.map((x,i)=>`<tr><td>${i+1}</td><td>${esc(x[0])}</td><td>${x[1]}</td><td>${n?Math.round(x[1]/n*100):0}%</td></tr>`).join('')
+        || '<tr><td colspan="4" class="muted">データがありません。</td></tr>'}
+    </table></div>
+  </div>
+  <div class="panel">
+    <h2>未回答の在籍者（${notYet.length}名）</h2>
+    <p class="muted">回答は任意です。未回答を理由に不利益を与えないでください。案内は1回までを目安に。</p>
+    <div class="tag-row">${notYet.map(e=>`<span class="badge b-gray">${esc(e.nameKanji||e.nameRoma)}</span>`).join('') || '<span class="muted">全員回答済みです。</span>'}</div>
+  </div>`;
+}
+async function mhSetStatus(id, status){
+  const f = mhFollow(id);
+  const row = {check_id:id, status:status, staff_note:f.staff_note||'', handled_by:myEmail(),
+    handled_at:new Date().toISOString(), updated_at:new Date().toISOString()};
+  await q(sb.from('mental_followups').upsert(row, {onConflict:'check_id'}));
+  const i = data.mentalFollowups.findIndex(x=>x.check_id===id);
+  if(i>=0) data.mentalFollowups[i]=row; else data.mentalFollowups.push(row);
+  toast('対応状況を更新しました');
+}
+async function mhSetNote(id, note){
+  const f = mhFollow(id);
+  const row = {check_id:id, status:f.status||'未対応', staff_note:note, handled_by:myEmail(),
+    handled_at:new Date().toISOString(), updated_at:new Date().toISOString()};
+  await q(sb.from('mental_followups').upsert(row, {onConflict:'check_id'}));
+  const i = data.mentalFollowups.findIndex(x=>x.check_id===id);
+  if(i>=0) data.mentalFollowups[i]=row; else data.mentalFollowups.push(row);
+  toast('メモを保存しました');
+}
+function mhExportCsv(){
+  const rows = data.mentalChecks.filter(r=>r.period===mhPeriodSel);
+  const cols = ['年度','回答日','氏名','所属','A','B','C','判定','面談希望','今すぐ話したい','対応状況','対応メモ','自分の対処法','増えている行動','会社に求める対応','就業上の措置','優先','自由記述','良いところ'];
+  const out = [cols.join(',')];
+  rows.forEach(r=>{
+    const e = empById(r.empId)||{}, f = mhFollow(r.id);
+    const v = [r.period, r.answeredOn, e.nameKanji||e.nameRoma||'', e.department||'', r.scoreA, r.scoreB, r.scoreC, r.judge,
+      r.meetingWish, r.urgent?'★':'', f.status||'', f.staff_note||'',
+      r.coping.join('｜'), r.risk.join('｜'), r.requests.join('｜'), r.measures.join('｜'),
+      r.priorities.join('｜'), r.freeComment, r.goodPoints];
+    out.push(v.map(x=>'"'+String(x==null?'':x).replace(/"/g,'""')+'"').join(','));
+  });
+  const blob = new Blob(['﻿'+out.join('\r\n')], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'こころの健康_'+mhPeriodSel+'.csv'; a.click();
+  toast('CSVを書き出しました');
+}
+
+/* ---------- 集計ビュー（管理者はここだけ） ---------- */
+async function mhLoadSummary(){
+  mhSummary = null;
+  try{
+    const {data:d, error} = await sb.rpc('mental_summary', {p_period: mhPeriodSel || mhPeriod()});
+    if(error){ mhSummary = {error:error.message}; } else { mhSummary = d; }
+  }catch(e){ mhSummary = {error:String(e.message||e)}; }
+  render();
+}
+function mhSummaryHtml(){
+  const s = mhSummary;
+  const sel = `<div class="toolbar"><label class="muted">年度</label>
+    <select onchange="mhPeriodSel=this.value;mhLoadSummary()">${mhPeriods().map(p=>`<option ${p===mhPeriodSel?'selected':''}>${esc(p)}</option>`).join('')}</select>
+    <button class="btn small ghost" onclick="mhLoadSummary()">再集計</button></div>`;
+  if(!s) return `<div class="panel">${sel}<p class="muted">集計中です…</p></div>`;
+  if(s.error) return `<div class="panel">${sel}<p class="muted">集計を取得できませんでした：${esc(s.error)}<br>（Supabase に supabase-mental-health.sql を実行してください）</p></div>`;
+  if(s.suppressed) return `<div class="panel">${sel}
+    <div class="alert-item yellow"><b>非表示</b><span>回答が${s.n}名で、個人が特定できるおそれがあるため集計を表示しません（5名以上で表示されます）。</span></div></div>`;
+  return `
+  <div class="panel">${sel}
+    <div class="grid cols4">
+      <div class="stat"><div class="num">${s.n}</div><div class="lbl">回答数</div></div>
+      <div class="stat"><div class="num">${s.high}</div><div class="lbl">高ストレス（${Math.round(s.high/s.n*100)}%）</div></div>
+      <div class="stat"><div class="num">${s.mid}</div><div class="lbl">やや高い</div></div>
+      <div class="stat"><div class="num">${s.meeting}</div><div class="lbl">面談希望</div></div>
+      <div class="stat"><div class="num">${s.avg_a}</div><div class="lbl">A 平均</div></div>
+      <div class="stat"><div class="num">${s.avg_b}</div><div class="lbl">B 平均</div></div>
+      <div class="stat"><div class="num">${s.avg_c}</div><div class="lbl">C 平均</div></div>
+      <div class="stat"><div class="num">${s.urgent}</div><div class="lbl">急ぎの相談</div></div>
+    </div>
+    <p class="muted" style="margin-top:10px">この画面には個人名・個人の点数は表示されません（サーバー側で集計のみ返しています）。個別対応はメンタル担当が行います。</p>
+  </div>
+  <div class="panel">
+    <h2>要望の多い項目</h2>
+    <p class="muted">「すぐやる／計画してやる／今はできない（理由つき）」の3区分で社員に必ず回答してください。</p>
+    <div class="tablewrap"><table><tr><th>順位</th><th>項目</th><th>件数</th><th>割合</th></tr>
+    ${(s.requests||[]).map((x,i)=>`<tr><td>${i+1}</td><td>${esc(x.item)}</td><td>${x.cnt}</td><td>${Math.round(x.cnt/s.n*100)}%</td></tr>`).join('')||'<tr><td colspan="4" class="muted">—</td></tr>'}
+    </table></div>
+  </div>
+  <div class="panel">
+    <h2>社員が実際にしている対処法</h2>
+    <div class="tablewrap"><table><tr><th>順位</th><th>対処法</th><th>件数</th></tr>
+    ${(s.coping||[]).map((x,i)=>`<tr><td>${i+1}</td><td>${esc(x.item)}</td><td>${x.cnt}</td></tr>`).join('')||'<tr><td colspan="3" class="muted">—</td></tr>'}
+    </table></div>
+  </div>`;
 }
 
 /* ================= タレント・スキル（カオナビ型） ================= */
@@ -4558,7 +5128,7 @@ function viewUsers(){
       <button class="btn small" onclick="addUser()">＋ ユーザーを追加</button>
     </div>
     <div class="tablewrap"><table>
-      <tr><th>メールアドレス</th><th>氏名</th><th>権限レベル</th><th>追加日</th><th></th></tr>
+      <tr><th>メールアドレス</th><th>氏名</th><th>権限レベル</th><th title="こころの健康の個人結果を扱える担当者">メンタル担当</th><th>追加日</th><th></th></tr>
       ${users.map(u=>{
         const self = u.email.toLowerCase()===myEmail();
         const lastOwner = u.role==='全体管理' && owners<=1;
@@ -4570,10 +5140,12 @@ function viewUsers(){
               ${ROLES.map(r=>`<option ${u.role===r?'selected':''}>${r}</option>`).join('')}
             </select>`}
           </td>
+          <td><label style="display:flex;gap:6px;align-items:center;font-size:12px">
+            <input type="checkbox" ${u.mhStaff?'checked':''} onchange="setUserMhStaff('${esc(u.email)}', this.checked)">${u.mhStaff?'担当':'—'}</label></td>
           <td class="muted">${esc(u.addedAt||'—')}</td>
           <td>${(self||lastOwner)?'<span class="muted">削除不可</span>':`<button class="btn small ghost" onclick="removeUser('${esc(u.email)}')">削除</button>`}</td>
         </tr>`;
-      }).join('')||'<tr><td colspan="5" class="muted">ユーザーがいません。</td></tr>'}
+      }).join('')||'<tr><td colspan="6" class="muted">ユーザーがいません。</td></tr>'}
     </table></div>
     <p class="muted" style="margin-top:8px">※自分自身の権限変更・削除はできません（管理者不在によるロックアウト防止）。最後の「全体管理」も変更・削除できません。</p>
   </div>
@@ -4587,8 +5159,16 @@ function viewUsers(){
       <li><b>社員</b>は、従業員マスタの「メールアドレス」欄が自分のログインメールと一致するレコードのみ表示されます。一致しない場合は何も表示されません。</li>
       <li>権限の判定はサーバー側（Supabase の RLS）でも行われるため、画面を操作しても他人のデータは取得・変更できません。</li>
       <li>退職者はまずここから削除し、Supabase の Authentication からアカウントも削除してください。</li>
+      <li><b>メンタル担当</b>は「こころの健康」タブで個人の結果を見られる担当者です。<b>解雇・昇進・異動に直接の権限を持つ人には付けないでください</b>（法定ストレスチェックでも人事権を持つ者は実施事務従事者になれません）。管理者・全体管理でも、このチェックが無ければ個人結果は1件も表示されません（Supabase の RLS で制限）。</li>
     </ul>
   </div>`;
+}
+async function setUserMhStaff(em, on){
+  if(!canAdmin()){ toast(denyMsg(), true); render(); return; }
+  await q(sb.from('allowed_users').update({mh_staff:!!on}).eq('email', em));
+  const u = data.allowedUsers.find(x=>x.email===em);
+  if(u) u.mhStaff = !!on;
+  render(); toast(em + (on? ' をメンタル担当にしました' : ' のメンタル担当を外しました'));
 }
 async function addUser(){
   const em = document.getElementById('nu_email').value.trim().toLowerCase();

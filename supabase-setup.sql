@@ -695,6 +695,157 @@ create policy kmt_jdm_write on public.jd_metrics for all to authenticated
   using (public.my_rank() >= 2 or employee_id = public.my_employee_id())
   with check (public.my_rank() >= 2 or employee_id = public.my_employee_id());
 
+-- ============================================================
+-- こころの健康セルフチェック（メンタルヘルス調査）
+-- KMT 人事管理システム 追加モジュール
+--
+-- 単体で流したいときは supabase-mental-health.sql に同じ内容が入っています。
+--
+-- ★ 設計の要点（法令上ここを外すと制度が成り立たない）
+--   ・個人結果を見られるのは「本人」と「メンタル担当（mh_staff）」だけ。
+--     管理者・全体管理でも mh_staff フラグが無ければ 1 行も見えない（RLS で強制）。
+--     理由：解雇・昇進・異動に直接の権限を持つ者は、法定ストレスチェックでも
+--           実施事務従事者になれない。人事権と健康情報を分離する。
+--   ・管理者は mental_summary() 経由の「集計値」だけ取得できる。
+--     回答者が 5 名未満の集計は個人が特定できるため、関数側で伏せる。
+--   ・対応記録（面談メモ等）は別テーブルにして、本人からも見えないようにしている。
+-- ============================================================
+
+-- 4-9-1) メンタル担当フラグ ---------------------------------------
+alter table public.allowed_users
+  add column if not exists mh_staff boolean not null default false;
+
+comment on column public.allowed_users.mh_staff is
+  'こころの健康セルフチェックの個人結果を取り扱える担当者。人事権を持たない者に限って付与すること。';
+
+create or replace function public.is_mh_staff()
+returns boolean language sql stable security definer set search_path = public as $$
+  select coalesce(
+    (select mh_staff from public.allowed_users
+      where lower(email) = lower(auth.jwt() ->> 'email') limit 1),
+    false);
+$$;
+revoke all on function public.is_mh_staff() from public, anon;
+grant execute on function public.is_mh_staff() to authenticated;
+
+-- 4-9-2) 回答本体 -------------------------------------------------
+create table if not exists public.mental_checks (
+  id             uuid primary key default gen_random_uuid(),
+  employee_id    uuid not null references public.employees(id) on delete cascade,
+  period         text not null,                        -- 例: '2026年度'
+  answered_on    date not null default current_date,
+  consent_at     timestamptz not null default now(),   -- 本人の同意（要配慮個人情報の取得根拠）
+  answers        jsonb not null default '{}'::jsonb,   -- {"q1":3, ... "q80":2}
+  score_a        int,                                  -- 仕事のストレス要因 17〜68
+  score_b        int,                                  -- 心身のストレス反応 29〜116
+  score_c        int,                                  -- 周囲のサポート不足 9〜36
+  judge          text default '',                      -- 高ストレス / やや高い / 目安内
+  coping         jsonb not null default '[]'::jsonb,   -- 本人の対処法
+  risk_behaviors jsonb not null default '[]'::jsonb,   -- 増えている行動
+  coping_best    text default '',
+  coping_plan    text default '',
+  coping_hard    text default '',
+  requests       jsonb not null default '[]'::jsonb,   -- 会社に求める対応
+  measures       jsonb not null default '[]'::jsonb,   -- 就業上の措置の希望
+  priorities     jsonb not null default '[]'::jsonb,   -- 優先してほしいこと（最大3）
+  free_comment   text default '',
+  good_points    text default '',
+  meeting_wish   text default '希望しない',
+  meeting_who    jsonb not null default '[]'::jsonb,
+  meeting_style  text default '',
+  meeting_lang   text default '',
+  contact_time   text default '',
+  urgent         boolean not null default false,       -- 「今すぐ話したい」
+  oncall         text default '',                      -- 夜間・休日の緊急連絡当番
+  updated_at     timestamptz not null default now(),
+  unique (employee_id, period)
+);
+create index if not exists mental_checks_period_idx on public.mental_checks (period);
+
+-- 4-9-3) 担当者の対応記録（本人にも見せない） ---------------------
+create table if not exists public.mental_followups (
+  check_id    uuid primary key references public.mental_checks(id) on delete cascade,
+  status      text not null default '未対応',   -- 未対応 / 連絡済 / 面談済 / 対応中 / 完了
+  staff_note  text default '',
+  handled_by  text default '',
+  handled_at  timestamptz,
+  updated_at  timestamptz not null default now()
+);
+
+-- 4-9-4) RLS ------------------------------------------------------
+alter table public.mental_checks    enable row level security;
+alter table public.mental_followups enable row level security;
+
+drop policy if exists kmt_mc_select on public.mental_checks;
+drop policy if exists kmt_mc_insert on public.mental_checks;
+drop policy if exists kmt_mc_update on public.mental_checks;
+drop policy if exists kmt_mc_delete on public.mental_checks;
+
+-- 本人 か メンタル担当 のみ。管理者・全体管理でもフラグが無ければ見えない
+create policy kmt_mc_select on public.mental_checks for select to authenticated
+  using (employee_id = public.my_employee_id() or public.is_mh_staff());
+create policy kmt_mc_insert on public.mental_checks for insert to authenticated
+  with check (employee_id = public.my_employee_id() or public.is_mh_staff());
+create policy kmt_mc_update on public.mental_checks for update to authenticated
+  using      (employee_id = public.my_employee_id() or public.is_mh_staff())
+  with check (employee_id = public.my_employee_id() or public.is_mh_staff());
+-- 削除は担当者のみ（本人が消すと対応中の案件が消えるため）
+create policy kmt_mc_delete on public.mental_checks for delete to authenticated
+  using (public.is_mh_staff());
+
+drop policy if exists kmt_mf_all on public.mental_followups;
+create policy kmt_mf_all on public.mental_followups for all to authenticated
+  using (public.is_mh_staff()) with check (public.is_mh_staff());
+
+-- 4-9-5) 集計（管理者はこれだけ見られる） -------------------------
+--    回答が 5 名未満のときは個人が特定できるため中身を返さない
+create or replace function public.mental_summary(p_period text)
+returns json language plpgsql stable security definer set search_path = public as $$
+declare
+  n int;
+  res json;
+begin
+  if public.my_rank() < 2 and not public.is_mh_staff() then
+    raise exception 'forbidden';
+  end if;
+
+  select count(*) into n from public.mental_checks where period = p_period;
+
+  if n < 5 then
+    return json_build_object('period', p_period, 'n', n, 'suppressed', true);
+  end if;
+
+  select json_build_object(
+    'period',   p_period,
+    'n',        n,
+    'suppressed', false,
+    'high',     (select count(*) from public.mental_checks where period=p_period and judge='高ストレス'),
+    'mid',      (select count(*) from public.mental_checks where period=p_period and judge='やや高い'),
+    'urgent',   (select count(*) from public.mental_checks where period=p_period and urgent),
+    'meeting',  (select count(*) from public.mental_checks where period=p_period and meeting_wish <> '希望しない'),
+    'avg_a',    (select round(avg(score_a)) from public.mental_checks where period=p_period),
+    'avg_b',    (select round(avg(score_b)) from public.mental_checks where period=p_period),
+    'avg_c',    (select round(avg(score_c)) from public.mental_checks where period=p_period),
+    'requests', coalesce((
+        select json_agg(x) from (
+          select r.item as item, count(*) as cnt
+            from public.mental_checks m,
+                 jsonb_array_elements_text(m.requests || m.measures) as r(item)
+           where m.period = p_period
+           group by r.item order by count(*) desc, r.item limit 20) x), '[]'::json),
+    'coping', coalesce((
+        select json_agg(x) from (
+          select c.item as item, count(*) as cnt
+            from public.mental_checks m,
+                 jsonb_array_elements_text(m.coping) as c(item)
+           where m.period = p_period
+           group by c.item order by count(*) desc, c.item limit 20) x), '[]'::json)
+  ) into res;
+  return res;
+end $$;
+revoke all on function public.mental_summary(text) from public, anon;
+grant execute on function public.mental_summary(text) to authenticated;
+
 -- 5) 最初の全体管理者 -----------------------------------------------
 --    ここで登録するのはメールアドレスと権限だけです。
 --    パスワードは本人がログイン画面の「新規登録（初回のみ）」で設定します。
