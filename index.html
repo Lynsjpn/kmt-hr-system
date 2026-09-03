@@ -359,8 +359,9 @@ const SUPABASE_KEY = 'sb_publishable_wv0PLH_4hHIt_lCnA6_ZHA_D_jpF1Zd';
 // persistSession   : セッションを localStorage に保存し、タブを閉じても残す
 // autoRefreshToken : 期限切れ前にトークンを自動更新（開かないまま長期間放置しない限り再ログイン不要）
 // storageKey       : キーを固定し、更新のたびにログアウトされるのを防ぐ
-// 注意: 保存先はブラウザごと・URLごと。公開URLとローカルファイルでは別扱いになるため、
-//       いつも同じURL（https://lynsjpn.github.io/kmt-hr-system/）を開くこと。
+// 注意: 保存先はブラウザごと・URLごと（オリジンごと）。公開URLとローカルファイルでは別扱いになる。
+//       公開URLが変わると全員ログインし直しになるので、いつも同じURLをブックマークして開くこと。
+//       （URLはここに直接書かない。引っ越しのたびに直し忘れるため）
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
     persistSession: true,
@@ -1168,7 +1169,7 @@ function annCardHtml(){
 }
 
 /* ===== サイドバー（白×ターコイズ・メニューはパステル・グループ折りたたみ式） ===== */
-const APP_VER = 'ver.20260902.37';
+const APP_VER = 'ver.20260903.38';
 /* tone＝メニューのパステル色。:root の --g-*／--g-*-t と対になっている */
 const NAV_GROUPS = [
   {key:'jinzai', label:'人材管理',   tone:'pink',  items:[['talent','👥','タレント'],['employees','🗂','従業員・人事情報'],['selfing','🪞','SELFing'],['skills','🧭','スキル管理'],['evals','📝','評価管理']]},
