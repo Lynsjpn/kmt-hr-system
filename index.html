@@ -362,6 +362,10 @@ const SUPABASE_KEY = 'sb_publishable_wv0PLH_4hHIt_lCnA6_ZHA_D_jpF1Zd';
 // 注意: 保存先はブラウザごと・URLごと（オリジンごと）。公開URLとローカルファイルでは別扱いになる。
 //       公開URLが変わると全員ログインし直しになるので、いつも同じURLをブックマークして開くこと。
 //       （URLはここに直接書かない。引っ越しのたびに直し忘れるため）
+/* パスワード再設定メールのリンクで戻ってきたか。
+   detectSessionInUrl が有効なので supabase-js が URL のハッシュをすぐ消してしまう。
+   createClient より前に控えておかないと、boot() の時点では判別できない。 */
+const INITIAL_HASH = location.hash || '';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
     persistSession: true,
@@ -869,6 +873,8 @@ function buildAlerts(){
 async function boot(){
   const {data:{session:s}} = await sb.auth.getSession();
   session = s;
+  /* 再設定リンクから戻ってきたときは、ダッシュボードより先に新しいパスワードを決めてもらう */
+  if(session && /type=recovery/.test(INITIAL_HASH)){ showNewPassword(); return; }
   if(!session){ showLogin(); return; }
   await start();
 }
@@ -933,6 +939,7 @@ function showLogin(msg, ok){
     <input type="password" id="lg_pass" placeholder="パスワード" autocomplete="current-password">
     <button class="btn" onclick="login()">ログイン</button>
     <button class="btn secondary" style="margin-top:8px" onclick="signup()">新規登録（初回のみ）</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="showForgot()">パスワードを忘れた方</button>
     <div class="login-msg ${ok?'ok':''}" id="lg_msg">${esc(msg||'')}</div>
   </div></div>`;
   const p = document.getElementById('lg_pass');
@@ -961,6 +968,70 @@ async function signup(){
     return;
   }
   showLogin('確認メールを送信しました。メール内のリンクをクリックしてから、ここでログインしてください。', true);
+}
+/* パスワード再設定 ①メールを送る画面 */
+function showForgot(msg, ok){
+  hideSidebar();
+  document.getElementById('main').innerHTML = `
+  <div class="login-wrap"><div class="login-card">
+    <h2>パスワードの再設定</h2>
+    <p class="muted">登録しているメールアドレスに、再設定用のリンクを送ります。</p>
+    <input type="email" id="fg_email" placeholder="メールアドレス" autocomplete="username">
+    <button class="btn" onclick="sendReset()">再設定メールを送る</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="showLogin()">ログイン画面に戻る</button>
+    <div class="login-msg ${ok?'ok':''}" id="lg_msg">${esc(msg||'')}</div>
+  </div></div>`;
+  const e = document.getElementById('fg_email');
+  e.addEventListener('keydown', ev=>{ if(ev.key==='Enter') sendReset(); });
+  e.focus();
+}
+async function sendReset(){
+  const email = document.getElementById('fg_email').value.trim();
+  const msg = document.getElementById('lg_msg');
+  if(!email || !email.includes('@')){ msg.textContent='メールアドレスを入力してください'; return; }
+  msg.textContent = '送信中…';
+  /* 戻り先は今開いているページ。Supabase の Authentication → URL Configuration の
+     Site URL / Redirect URLs にこのURLが入っていないと、リンクが別の場所へ飛ぶ。 */
+  const url = location.origin + location.pathname;
+  const {error} = await sb.auth.resetPasswordForEmail(email, {redirectTo: url});
+  if(error){ msg.textContent = '送信に失敗しました：'+error.message; return; }
+  /* 未登録のメールでも同じ文面を出す。登録の有無を外部に教えないため。 */
+  showLogin('再設定メールを送信しました。メール内のリンクを開くと、新しいパスワードを設定できます。（届かないときは迷惑メールもご確認ください）', true);
+}
+/* パスワード再設定 ②新しいパスワードを決める画面（リンクから戻ってきたとき） */
+function showNewPassword(msg){
+  hideSidebar();
+  document.getElementById('main').innerHTML = `
+  <div class="login-wrap"><div class="login-card">
+    <h2>新しいパスワードを設定</h2>
+    <p class="muted">6文字以上で入力してください。設定するとそのままログインします。</p>
+    <input type="password" id="np1" placeholder="新しいパスワード" autocomplete="new-password">
+    <input type="password" id="np2" placeholder="もう一度入力" autocomplete="new-password">
+    <button class="btn" onclick="setNewPassword()">この内容で設定する</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="logout()">キャンセル</button>
+    <div class="login-msg" id="lg_msg">${esc(msg||'')}</div>
+  </div></div>`;
+  const p = document.getElementById('np2');
+  p.addEventListener('keydown', e=>{ if(e.key==='Enter') setNewPassword(); });
+  document.getElementById('np1').focus();
+}
+async function setNewPassword(){
+  const p1 = document.getElementById('np1').value;
+  const p2 = document.getElementById('np2').value;
+  const msg = document.getElementById('lg_msg');
+  if(p1.length < 6){ msg.textContent='パスワードは6文字以上にしてください'; return; }
+  if(p1 !== p2){ msg.textContent='2つのパスワードが一致しません'; return; }
+  msg.textContent = '設定中…';
+  const {error} = await sb.auth.updateUser({password:p1});
+  if(error){
+    msg.textContent = '設定に失敗しました：'+error.message+'（リンクの有効期限が切れている場合は、もう一度送り直してください）';
+    return;
+  }
+  history.replaceState(null, '', location.pathname);   /* URLに残ったトークンを消す */
+  const {data:{session:s}} = await sb.auth.getSession();
+  session = s;
+  if(session){ await start(); toast('パスワードを変更しました'); }
+  else showLogin('パスワードを設定しました。新しいパスワードでログインしてください。', true);
 }
 async function logout(){
   await sb.auth.signOut();
@@ -1187,7 +1258,7 @@ function annCardHtml(){
 }
 
 /* ===== サイドバー（白×ターコイズ・メニューはパステル・グループ折りたたみ式） ===== */
-const APP_VER = 'ver.20260903.39';
+const APP_VER = 'ver.20260903.40';
 /* tone＝メニューのパステル色。:root の --g-*／--g-*-t と対になっている */
 const NAV_GROUPS = [
   {key:'jinzai', label:'人材管理',   tone:'pink',  items:[['talent','👥','タレント'],['employees','🗂','従業員・人事情報'],['selfing','🪞','SELFing'],['mental','💚','こころの健康'],['skills','🧭','スキル管理'],['evals','📝','評価管理']]},
@@ -5846,6 +5917,8 @@ sb.auth.onAuthStateChange((event, s)=>{
   if(event==='SIGNED_OUT'){ session=null; showLogin(); return; }
   // トークン自動更新後も session を最新に保つ（古いトークンを持ち続けないため）
   if(s) session = s;
+  // 再設定リンクの処理が boot() より遅れて終わった場合の保険
+  if(event==='PASSWORD_RECOVERY'){ showNewPassword(); }
 });
 boot();
 </script>
