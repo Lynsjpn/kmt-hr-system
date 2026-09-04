@@ -872,7 +872,16 @@ function buildAlerts(){
 
 /* ================= AUTH ================= */
 async function boot(){
-  const {data:{session:s}} = await sb.auth.getSession();
+  let s = null;
+  try{
+    const {data, error} = await sb.auth.getSession();
+    if(error) throw error;
+    s = data.session;
+  }catch(e){
+    /* 起動時に通信が失敗しただけの場合、ログイン画面を出すと
+       「ログアウトされた」と誤解される。再試行できる画面にする。 */
+    if(!isAuthError(e)){ showLoadError(e); return; }
+  }
   session = s;
   /* 再設定リンクから戻ってきたときは、ダッシュボードより先に新しいパスワードを決めてもらう */
   if(session && /type=recovery/.test(INITIAL_HASH)){ showNewPassword(); return; }
@@ -882,7 +891,7 @@ async function boot(){
 async function start(){
   document.getElementById('main').innerHTML = '<div class="login-wrap"><div class="muted">データ読み込み中…</div></div>';
   try{ await loadAll(); }
-  catch(e){ showLogin('データ取得に失敗しました：'+e.message); return; }
+  catch(e){ showLoadError(e); return; }
   if(!data.allowedUsers.length || !myUser()){
     hideSidebar();
     document.getElementById('main').innerHTML = `
@@ -1070,6 +1079,27 @@ async function savePasswordChange(){
   if(error){ msg.textContent = '変更できませんでした：'+error.message; return; }
   closeModal();
   toast('パスワードを変更しました');
+}
+/* データ取得に失敗したときの画面。
+   通信が一瞬切れただけでもここに来るが、その場合ログイン自体は生きている。
+   以前はログイン画面を出していたため「ログアウトされた」と誤解され、
+   不要なパスワード再設定に進んでしまうことがあった。
+   本当に認証が切れているときだけログイン画面に戻す。 */
+function isAuthError(e){
+  const m = ((e && (e.message || e.msg)) || '') + ' ' + ((e && e.code) || '');
+  return /jwt|token|session|refresh|unauthor|401|403/i.test(m);
+}
+function showLoadError(e){
+  if(isAuthError(e)){ session = null; showLogin('ログインの有効期限が切れました。もう一度ログインしてください。'); return; }
+  hideSidebar();
+  document.getElementById('main').innerHTML = `
+  <div class="login-wrap"><div class="login-card">
+    <h2>データを読み込めませんでした</h2>
+    <p class="muted">通信が不安定なときに起こります。<b>ログインしたままなので、押し直すだけで戻れます。</b><br>
+      <span class="muted" style="font-size:11px">${esc((e && e.message) || String(e))}</span></p>
+    <button class="btn" onclick="start()">もう一度読み込む</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="logout()">ログアウトする</button>
+  </div></div>`;
 }
 async function logout(){
   await sb.auth.signOut();
@@ -1296,7 +1326,7 @@ function annCardHtml(){
 }
 
 /* ===== サイドバー（白×ターコイズ・メニューはパステル・グループ折りたたみ式） ===== */
-const APP_VER = 'ver.20260904.41';
+const APP_VER = 'ver.20260904.42';
 /* tone＝メニューのパステル色。:root の --g-*／--g-*-t と対になっている */
 const NAV_GROUPS = [
   {key:'jinzai', label:'人材管理',   tone:'pink',  items:[['talent','👥','タレント'],['employees','🗂','従業員・人事情報'],['selfing','🪞','SELFing'],['mental','💚','こころの健康'],['skills','🧭','スキル管理'],['evals','📝','評価管理']]},
