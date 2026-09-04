@@ -173,8 +173,9 @@ td.goal-cur{outline:2px solid var(--accent);outline-offset:-2px}
 .sb-item.active{background:var(--gc);color:var(--gt);font-weight:800}
 .sb-item .ic{width:18px;text-align:center}
 .sb-single{margin-bottom:6px}
-.sb-foot{margin-top:10px;text-align:center}
+.sb-foot{margin-top:10px;text-align:center;display:flex;justify-content:center;gap:8px;align-items:center;flex-wrap:wrap}
 .sb-foot a{color:var(--accent);font-size:12px}
+.sb-foot .sep{color:var(--border);font-size:12px}
 /* モバイル：ハンバーガーで開閉 */
 #sbToggle{display:none;position:fixed;top:10px;left:10px;z-index:60;background:var(--accent);color:#fff;border:none;
   border-radius:8px;width:38px;height:38px;font-size:18px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.25)}
@@ -1033,6 +1034,43 @@ async function setNewPassword(){
   if(session){ await start(); toast('パスワードを変更しました'); }
   else showLogin('パスワードを設定しました。新しいパスワードでログインしてください。', true);
 }
+/* ログイン中にパスワードを変える。
+   再設定メールに頼らずに変えられるようにしておく（メールが届かない・リンクが切れている
+   といった事情でログインできなくなるのを防ぐため）。 */
+function openPasswordChange(){
+  if(!session){ toast('ログインしてから操作してください', true); return; }
+  hideSidebar();
+  modal(`
+    <h3>パスワード変更</h3>
+    <p class="muted" style="margin-bottom:12px">${esc(myEmail())} のパスワードを変更します。<br>
+      6文字以上。変更後もログインしたままです。</p>
+    <div class="formgrid">
+      <div style="grid-column:1/-1"><label>新しいパスワード</label>
+        <input type="password" id="cp1" autocomplete="new-password"></div>
+      <div style="grid-column:1/-1"><label>もう一度入力</label>
+        <input type="password" id="cp2" autocomplete="new-password"></div>
+    </div>
+    <div class="muted" id="cp_msg" style="min-height:18px;margin-top:8px"></div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">キャンセル</button>
+      <button class="btn" onclick="savePasswordChange()">変更する</button>
+    </div>`);
+  const p2 = document.getElementById('cp2');
+  p2.addEventListener('keydown', e=>{ if(e.key==='Enter') savePasswordChange(); });
+  document.getElementById('cp1').focus();
+}
+async function savePasswordChange(){
+  const p1 = document.getElementById('cp1').value;
+  const p2 = document.getElementById('cp2').value;
+  const msg = document.getElementById('cp_msg');
+  if(p1.length < 6){ msg.textContent = 'パスワードは6文字以上にしてください'; return; }
+  if(p1 !== p2){ msg.textContent = '2つのパスワードが一致しません'; return; }
+  msg.textContent = '変更中…';
+  const {error} = await sb.auth.updateUser({password:p1});
+  if(error){ msg.textContent = '変更できませんでした：'+error.message; return; }
+  closeModal();
+  toast('パスワードを変更しました');
+}
 async function logout(){
   await sb.auth.signOut();
   session = null;
@@ -1258,7 +1296,7 @@ function annCardHtml(){
 }
 
 /* ===== サイドバー（白×ターコイズ・メニューはパステル・グループ折りたたみ式） ===== */
-const APP_VER = 'ver.20260903.40';
+const APP_VER = 'ver.20260904.41';
 /* tone＝メニューのパステル色。:root の --g-*／--g-*-t と対になっている */
 const NAV_GROUPS = [
   {key:'jinzai', label:'人材管理',   tone:'pink',  items:[['talent','👥','タレント'],['employees','🗂','従業員・人事情報'],['selfing','🪞','SELFing'],['mental','💚','こころの健康'],['skills','🧭','スキル管理'],['evals','📝','評価管理']]},
@@ -1330,7 +1368,11 @@ function renderNav(){
         <span class="ic">🏠</span>ダッシュボード</button>
     </div>
     ${groups}
-    <div class="sb-foot"><a href="javascript:logout()">ログアウト</a></div>`;
+    <div class="sb-foot">
+      <a href="javascript:openPasswordChange()">🔑 パスワード変更</a>
+      <span class="sep">|</span>
+      <a href="javascript:logout()">ログアウト</a>
+    </div>`;
 }
 function go(v){
   if(!navAllowed(v)){ toast('このタブを表示する権限がありません', true); return; }
