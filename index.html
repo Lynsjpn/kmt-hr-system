@@ -289,6 +289,10 @@ button.btn.ghost{background:#fff;color:var(--sub);border:1px solid var(--border)
 .jd-metric{width:170px}
 .jd-metric input{width:100%;font-size:12px;padding:3px 6px;margin-top:2px}
 .b-purple{background:#f3edfd;color:#7c3aed}
+/* 福利厚生アンケートの自由記述 */
+.wf-quote{border-left:3px solid var(--accent);background:var(--accent-soft);border-radius:0 8px 8px 0;
+  padding:8px 12px;margin-bottom:8px;font-size:13px;line-height:1.7;white-space:pre-wrap}
+.wf-who{font-size:11px;font-weight:700;color:var(--accent);margin-bottom:3px}
 table.jd td{font-size:13px;vertical-align:middle}
 table.jd td:last-child{width:110px;white-space:nowrap;vertical-align:top;padding-top:8px}
 table.jd .badge{margin-left:6px}
@@ -554,7 +558,8 @@ const KPI_LIBRARY = [
 /* ---------------- state ---------------- */
 let data = {departments:[], employees:[], evaluations:[], kpis:[], assets:[], docTemplates:[], allowedUsers:[], skillDefs:[], empSkills:{}, announcements:[], annReads:[], licenses:[], monthlyReports:[], teamTargets:[], caseRecords:[], appUpdates:[], updReads:[],
 roleMaster:[], selfingReports:[], selfingRoles:[], roleSkillTargets:[], mandalaCharts:[],
-jdItems:[], jdChecks:[], jdAssignments:[], jdMetrics:[]};
+jdItems:[], jdChecks:[], jdAssignments:[], jdMetrics:[],
+wfQuestions:[], wfResponses:[], wfTopics:[], wfTasks:[], wfIdeas:[]};
 let session = null;
 let view = 'dashboard';
 let empFilter = {q:'', status:'在籍', type:'', dept:''};
@@ -689,7 +694,8 @@ function assetToDb(a){ return {id:a.id, asset_no:a.assetNo||'', category:a.categ
 
 async function loadAll(){
   const [deps, tpls, emps, docs, evals, kpis, assets, allowed, skdefs, esk, anns, reads, lics,
-         mrep, ttg, crec, upds, urds, rmst, srep, srol, rst, mnd, jdi, jdc, jda, jdm] = await Promise.all([
+         mrep, ttg, crec, upds, urds, rmst, srep, srol, rst, mnd, jdi, jdc, jda, jdm,
+         wfq, wfr, wft, wfk, wfi] = await Promise.all([
     q(sb.from('departments').select('*').order('sort_order')),
     q(sb.from('doc_templates').select('*').order('sort_order')),
     q(sb.from('employees').select('*')),
@@ -717,7 +723,18 @@ async function loadAll(){
     q(sb.from('jd_checks').select('*')),
     q(sb.from('jd_assignments').select('*')),
     q(sb.from('jd_metrics').select('*')),
+    /* 福利厚生は管理者以上のみ。社員のときはRLSで空が返るだけで、エラーにはならない。 */
+    q(sb.from('welfare_questions').select('*').order('sort_order')),
+    q(sb.from('welfare_responses').select('*').order('submitted_at')),
+    q(sb.from('welfare_topics').select('*').order('sort_order')),
+    q(sb.from('welfare_tasks').select('*').order('sort_order')),
+    q(sb.from('welfare_ideas').select('*').order('sort_order')),
   ]);
+  data.wfQuestions = wfq||[];
+  data.wfResponses = wfr||[];
+  data.wfTopics    = wft||[];
+  data.wfTasks     = wfk||[];
+  data.wfIdeas     = wfi||[];
   data.jdItems  = (jdi||[]).map(r=>({id:r.id, dept:r.dept||'', block:r.block, subdesk:r.subdesk||'',
     track:r.track||'共通', item:r.item, skillId:r.skill_id||'',
     standard:r.standard||'', metric:r.metric||'', target:r.target||'', legal:r.legal||'',
@@ -1127,6 +1144,8 @@ const NAV = [
   ['geppo','GLT月報',1],
   ['kpi','KPI管理',1],
   ['assets','資産管理',2],
+  /* 福利厚生は、記名のアンケート（給与や上司への不満を含む）を扱うため管理者以上に限る */
+  ['welfare','福利厚生',2],
   ['guide','手続きガイド',0],
   ['users','ユーザー管理',3],
   ['data','データ管理',2],
@@ -1326,11 +1345,11 @@ function annCardHtml(){
 }
 
 /* ===== サイドバー（白×ターコイズ・メニューはパステル・グループ折りたたみ式） ===== */
-const APP_VER = 'ver.20260904.42';
+const APP_VER = 'ver.20260904.43';
 /* tone＝メニューのパステル色。:root の --g-*／--g-*-t と対になっている */
 const NAV_GROUPS = [
   {key:'jinzai', label:'人材管理',   tone:'pink',  items:[['talent','👥','タレント'],['employees','🗂','従業員・人事情報'],['selfing','🪞','SELFing'],['mental','💚','こころの健康'],['skills','🧭','スキル管理'],['evals','📝','評価管理']]},
-  {key:'romu',   label:'労務・書類', tone:'lilac', items:[['docs','📄','労務・書類管理'],['licenses','🏛','許可証管理'],['guide','📘','手続きガイド']]},
+  {key:'romu',   label:'労務・書類', tone:'lilac', items:[['docs','📄','労務・書類管理'],['licenses','🏛','許可証管理'],['welfare','🎁','福利厚生'],['guide','📘','手続きガイド']]},
   {key:'keiei',  label:'経営管理',   tone:'mint',  items:[['geppo','🗓','GLT月報'],['kpi','📈','KPI管理'],['assets','💼','資産管理']]},
   {key:'system', label:'設定',       tone:'sky',   items:[['users','👤','ユーザー管理'],['data','⚙️','データ管理']]},
 ];
@@ -1430,6 +1449,7 @@ function render(){
   else if(view==='talent') m.innerHTML = viewTalent();
   else if(view==='skills') m.innerHTML = viewSkills();
   else if(view==='licenses') m.innerHTML = viewLicenses();
+  else if(view==='welfare')  m.innerHTML = viewWelfare();
   else if(view==='geppo') m.innerHTML = viewGeppo();
   else if(view==='selfing') m.innerHTML = viewSelfing();
   else if(view==='mental') m.innerHTML = viewMental();
@@ -4123,6 +4143,247 @@ async function delJdItem(id){
   data.jdItems  = data.jdItems.filter(x=>x.id!==id);
   data.jdChecks = data.jdChecks.filter(x=>x.itemId!==id);
   render(); toast('削除しました');
+}
+
+/* ================= 福利厚生（委員会） ================= */
+/* スプレッドシート「【委員会】福利厚生・働き方」の内容をそのまま持ってきている。
+   記名アンケートで、給与や上司への不満も含むため、この画面は管理者以上のみ。
+   設問は q1..q59 のコードで持ち、welfare_questions に文面と種類がある。 */
+let wfSub  = 'summary';   // summary | free | people | topics | tasks
+let wfQ    = '';          // 自由記述で見ている設問
+let wfWho  = '';          // 回答一覧で開いている人
+
+const WF_SUBS = [['summary','集計'],['free','自由記述'],['people','回答一覧'],
+                 ['topics','検討課題'],['tasks','タスク・アイデア']];
+
+function wfQuestion(code){ return data.wfQuestions.find(q=>q.code===code); }
+/* 回答を数値にする。数字ならそのまま、「満足」等は scale で読み替える。 */
+function wfNum(resp, code){
+  const q = wfQuestion(code); if(!q) return null;
+  const v = (resp.answers||{})[code];
+  if(v==null || v==='') return null;
+  if(q.scale && q.scale[v]!=null) return q.scale[v];
+  const n = Number(v);
+  return isFinite(n) ? n : null;
+}
+function wfAvg(code){
+  const xs = data.wfResponses.map(r=>wfNum(r, code)).filter(v=>v!=null);
+  return xs.length ? {avg: xs.reduce((a,b)=>a+b,0)/xs.length, n: xs.length} : null;
+}
+/* 設問の短い見出し。[ ] があればその中身、無ければ先頭の番号を落として短くする。 */
+function wfShort(label){
+  const m = label.match(/\[([^\]]+)\]/);
+  if(m) return m[1];
+  return label.replace(/^\d+\.\s*/, '').replace(/[（(].*$/, '').slice(0, 26);
+}
+function wfBar(v, max, color){
+  const pct = Math.max(0, Math.min(100, v / max * 100));
+  return `<div class="progress" style="min-width:120px"><div style="width:${pct}%;background:${color}"></div></div>`;
+}
+function wfScoreColor(v){ return v >= 4 ? 'var(--ok)' : v >= 3 ? 'var(--accent)' : 'var(--warn)'; }
+
+function viewWelfare(){
+  if(myRank() < 2) return '<div class="panel"><h2>閲覧権限がありません</h2><p class="muted">福利厚生アンケートには記名の意見が含まれるため、管理者以上のみが閲覧できます。</p></div>';
+  if(!data.wfResponses.length && !data.wfTopics.length)
+    return '<div class="panel"><h2>🎁 福利厚生</h2><p class="muted">データがまだ登録されていません。</p></div>';
+  if(!WF_SUBS.some(s=>s[0]===wfSub)) wfSub = 'summary';
+  return `
+  <div class="panel">
+    <h2>🎁 福利厚生 <span class="en">委員会 — アンケート結果と検討課題</span></h2>
+    <div class="toolbar">
+      <div class="viewseg">
+        ${WF_SUBS.map(([k,l])=>`<button class="${wfSub===k?'active':''}" onclick="wfSub='${k}';render()">${l}</button>`).join('')}
+      </div>
+      <div class="spacer"></div>
+      <span class="badge b-purple">記名回答のため管理者以上のみ</span>
+    </div>
+    ${wfSub==='summary'? wfSummaryHtml()
+     : wfSub==='free'?   wfFreeHtml()
+     : wfSub==='people'? wfPeopleHtml()
+     : wfSub==='topics'? wfTopicsHtml()
+     :                   wfTasksHtml()}
+  </div>`;
+}
+
+/* ---- 1) 集計 ---- */
+function wfSummaryHtml(){
+  const rs = data.wfResponses;
+  const byOrg = {}, byEmp = {};
+  rs.forEach(r=>{ byOrg[r.org||'（未記入）'] = (byOrg[r.org||'（未記入）']||0)+1;
+                  byEmp[r.employment_type||'（未記入）'] = (byEmp[r.employment_type||'（未記入）']||0)+1; });
+
+  const group = (title, codes, max, note) => {
+    const rows = codes.map(c=>({c, q:wfQuestion(c), a:wfAvg(c)})).filter(x=>x.q && x.a);
+    if(!rows.length) return '';
+    rows.sort((a,b)=>a.a.avg-b.a.avg);          // 低い順＝手当てが要る順
+    return `
+    <div class="section-title" style="margin-top:16px">${title}
+      ${note? `<span class="muted" style="font-weight:400">　${note}</span>`:''}</div>
+    <div class="tablewrap"><table>
+      <tr><th>項目</th><th style="width:150px">平均</th><th class="center" style="width:70px">点</th><th class="center" style="width:60px">回答</th></tr>
+      ${rows.map(x=>`<tr>
+        <td>${esc(wfShort(x.q.label))}</td>
+        <td>${wfBar(x.a.avg, max, wfScoreColor(x.a.avg / max * 5))}</td>
+        <td class="center"><b>${x.a.avg.toFixed(2)}</b><span class="muted small">/${max}</span></td>
+        <td class="center muted">${x.a.n}</td>
+      </tr>`).join('')}
+    </table></div>`;
+  };
+
+  return `
+  <div class="grid cols4" style="margin-bottom:6px">
+    <div class="stat"><div class="num">${rs.length}</div><div class="lbl">回答数</div></div>
+    ${Object.entries(byOrg).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([k,v])=>
+      `<div class="stat"><div class="num">${v}</div><div class="lbl">${esc(k)}</div></div>`).join('')}
+  </div>
+  <p class="muted" style="margin-bottom:4px">雇用形態：${Object.entries(byEmp).sort((a,b)=>b[1]-a[1])
+      .map(([k,v])=>`${esc(k)} ${v}名`).join('／')}</p>
+  <p class="muted">期間：${rs.length? new Date(rs[0].submitted_at).toLocaleDateString('ja-JP')
+      + ' 〜 ' + new Date(rs[rs.length-1].submitted_at).toLocaleDateString('ja-JP') : '—'}
+    表は<b>点数の低い順</b>に並べています（手を打つべき順）。</p>
+
+  ${group('全体の評価（5点満点）', ['q33','q34','q35','q36','q37','q38','q39'], 5)}
+  ${group('働き方の満足度（5点満点）', ['q9','q10','q11','q12'], 5, '「満足」を5・「不満」を1として計算')}
+  ${group('ワークライフバランス・組織（5点満点）', ['q13','q14','q15','q16','q24','q7'], 5)}
+  ${group('福利厚生の重要度（5点満点・高いほど求められている）', ['q2','q3','q4','q5','q6'], 5, '「高い」を4・「普通」を3として計算')}
+
+  <div class="section-title" style="margin-top:16px">仕事で重視すること（1位が最重視・数字が小さいほど優先）</div>
+  <div class="tablewrap"><table>
+    <tr><th>項目</th><th style="width:150px">平均順位</th><th class="center" style="width:80px">平均</th></tr>
+    ${['q47','q48','q49','q50','q51','q52'].map(c=>({c,q:wfQuestion(c),a:wfAvg(c)}))
+      .filter(x=>x.q&&x.a).sort((a,b)=>a.a.avg-b.a.avg).map(x=>`<tr>
+        <td>${esc(wfShort(x.q.label))}</td>
+        <td>${wfBar(7 - x.a.avg, 6, 'var(--accent)')}</td>
+        <td class="center"><b>${x.a.avg.toFixed(2)}</b><span class="muted small">位</span></td>
+      </tr>`).join('')}
+  </table></div>`;
+}
+
+/* ---- 2) 自由記述 ---- */
+function wfFreeHtml(){
+  const texts = data.wfQuestions.filter(q=>q.kind==='text' &&
+    data.wfResponses.some(r=>(r.answers||{})[q.code]));
+  if(!texts.length) return '<div class="muted">自由記述の設問がありません。</div>';
+  if(!wfQ || !texts.some(q=>q.code===wfQ)) wfQ = texts[0].code;
+  const q = wfQuestion(wfQ);
+  /* 「特になし」の類は後ろにまとめる。読む価値のある意見を上に出すため。 */
+  const NOTHING = /^[\s]*(特に(は)?(ない|ありません|なし)|なし|無し|無いです|ございません|ありません|とくになし|特記事項なし|コメント無|無|[-－ー])[。\.\s]*$/;
+  const all = data.wfResponses.map(r=>({r, v:(r.answers||{})[wfQ]||''})).filter(x=>x.v);
+  const real = all.filter(x=>!NOTHING.test(x.v));
+  const none = all.length - real.length;
+  return `
+  <div class="toolbar">
+    <select onchange="wfQ=this.value;render()" style="max-width:100%;flex:1">
+      ${texts.map(t=>`<option value="${t.code}" ${t.code===wfQ?'selected':''}>${esc(wfShort(t.label))}（${
+        data.wfResponses.filter(r=>(r.answers||{})[t.code]).length}件）</option>`).join('')}
+    </select>
+  </div>
+  <p class="muted" style="margin-bottom:10px">${esc(q?q.label:'')}</p>
+  <p class="muted" style="margin-bottom:8px">中身のある回答 ${real.length}件${none? `／「特になし」等 ${none}件は省略`:''}</p>
+  ${real.map(x=>`
+    <div class="wf-quote">
+      <div class="wf-who">${esc(x.r.name||'（無記名）')}<span class="muted">　${esc(x.r.org||'')}・${esc(x.r.employment_type||'')}</span></div>
+      <div>${esc(x.v)}</div>
+    </div>`).join('') || '<div class="muted">中身のある回答はありませんでした。</div>'}`;
+}
+
+/* ---- 3) 回答一覧（1人分をすべて見る） ---- */
+function wfPeopleHtml(){
+  const rs = data.wfResponses;
+  if(wfWho){
+    const r = rs.find(x=>x.id===wfWho);
+    if(!r) { wfWho=''; return wfPeopleHtml(); }
+    return `
+    <div class="toolbar">
+      <button class="btn small ghost" onclick="wfWho='';render()">← 一覧に戻る</button>
+      <b>${esc(r.name||'（無記名）')}</b>
+      <span class="badge b-gray">${esc(r.org||'')}</span>
+      <span class="badge b-gray">${esc(r.employment_type||'')}</span>
+      <span class="muted">${new Date(r.submitted_at).toLocaleString('ja-JP')}</span>
+    </div>
+    <div class="tablewrap"><table>
+      ${data.wfQuestions.filter(q=>(r.answers||{})[q.code]).map(q=>`<tr>
+        <td style="width:38%"><span class="muted small">${esc(q.label)}</span></td>
+        <td>${esc((r.answers||{})[q.code])}</td>
+      </tr>`).join('')}
+    </table></div>`;
+  }
+  return `
+  <p class="muted" style="margin-bottom:8px">名前をクリックすると、その人の回答をすべて表示します。</p>
+  <div class="tablewrap"><table>
+    <tr><th>回答日</th><th>氏名</th><th>所属</th><th>雇用形態</th>
+        <th class="center">会社全体</th><th class="center">報酬</th><th class="center">WLB</th></tr>
+    ${rs.map(r=>{
+      const cell = c => { const v = wfNum(r, c); return v==null? '<td class="center muted">—</td>'
+        : `<td class="center"><span class="badge" style="background:${wfScoreColor(v)}1a;color:${wfScoreColor(v)}">${v}</span></td>`; };
+      return `<tr class="clickable" onclick="wfWho='${r.id}';render()">
+        <td class="muted">${new Date(r.submitted_at).toLocaleDateString('ja-JP')}</td>
+        <td><b>${esc(r.name||'（無記名）')}</b></td>
+        <td>${esc(r.org||'')}</td>
+        <td>${esc(r.employment_type||'')}</td>
+        ${cell('q38')}${cell('q33')}${cell('q34')}
+      </tr>`;
+    }).join('')}
+  </table></div>`;
+}
+
+/* ---- 4) 検討課題 ---- */
+function wfTopicsHtml(){
+  const P = {'高':'b-red','中':'b-yellow','低':'b-gray'};
+  return `
+  <p class="muted" style="margin-bottom:10px">委員会で挙がっている検討課題です。対応済みのチェックはその場で保存されます。</p>
+  <div class="tablewrap"><table>
+    <tr><th style="width:110px">カテゴリ</th><th>課題・検討事項</th><th>現状（KMT）</th><th>現状（大房）</th>
+        <th>検討方針</th><th class="center" style="width:60px">優先度</th><th class="center" style="width:70px">対応済み</th></tr>
+    ${data.wfTopics.map(t=>`<tr class="${t.done?'muted':''}">
+      <td><b>${esc(t.category)}</b></td>
+      <td>${esc(t.issue||'—')}</td>
+      <td class="muted">${esc(t.status_kmt||'—')}</td>
+      <td class="muted">${esc(t.status_obo||'—')}</td>
+      <td class="muted small">${esc(t.policy||'—')}</td>
+      <td class="center">${t.priority? `<span class="badge ${P[t.priority]||'b-gray'}">${esc(t.priority)}</span>`:''}</td>
+      <td class="center"><input type="checkbox" ${t.done?'checked':''} onchange="setWfTopicDone('${t.id}',this.checked)"></td>
+    </tr>`).join('')}
+  </table></div>`;
+}
+
+/* ---- 5) タスク・アイデア ---- */
+function wfTasksHtml(){
+  const P = {'高':'b-red','中':'b-yellow','低':'b-gray'};
+  return `
+  <div class="section-title">タスク</div>
+  <div class="tablewrap"><table>
+    <tr><th style="width:150px">検討事項</th><th>具体的な内容</th><th class="center" style="width:60px">優先度</th>
+        <th style="width:110px">担当者</th><th style="width:100px">目標期日</th><th>詳細・参考</th></tr>
+    ${data.wfTasks.map(t=>`<tr>
+      <td><b>${esc(t.title)}</b></td>
+      <td>${esc(t.detail||'—')}</td>
+      <td class="center">${t.priority? `<span class="badge ${P[t.priority]||'b-gray'}">${esc(t.priority)}</span>`:''}</td>
+      <td>${esc(t.owner||'—')}</td>
+      <td class="${t.due_date?'':'muted'}">${t.due_date? esc(t.due_date) : '未定'}</td>
+      <td class="muted small">${/^https?:\/\//.test(t.ref||'')
+        ? `<a href="${esc(t.ref)}" target="_blank" rel="noopener">リンクを開く</a>` : esc(t.ref||'—')}</td>
+    </tr>`).join('')}
+  </table></div>
+  <div class="section-title" style="margin-top:18px">福利厚生アイデア</div>
+  <div class="tablewrap"><table>
+    <tr><th>アイデア</th><th class="center" style="width:80px">導入優先度</th><th style="width:110px">コスト上限</th><th>詳細</th></tr>
+    ${data.wfIdeas.map(i=>`<tr>
+      <td><b>${esc(i.idea)}</b></td>
+      <td class="center">${esc(i.priority||'—')}</td>
+      <td>${esc(i.cost_cap||'—')}</td>
+      <td class="muted">${esc(i.detail||'—')}</td>
+    </tr>`).join('')}
+  </table></div>
+  <p class="muted" style="margin-top:10px">アンケートで実際に挙がった要望は「自由記述」タブの
+    <b>16. 会社に追加してほしい福利厚生</b> で読めます。</p>`;
+}
+
+async function setWfTopicDone(id, done){
+  if(!canEdit()){ toast(denyMsg(), true); return; }
+  await q(sb.from('welfare_topics').update({done}).eq('id', id));
+  const t = data.wfTopics.find(x=>x.id===id); if(t) t.done = done;
+  render();
 }
 
 /* ================= 社内の許可証管理 ================= */
